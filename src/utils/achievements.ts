@@ -1,6 +1,9 @@
 import {
+  AchievementCategory,
   AchievementCounters,
   AchievementDefinition,
+  AchievementIcon,
+  AchievementRarity,
   AchievementSystemState,
   CardSRState,
   DailyActivityMap,
@@ -28,17 +31,148 @@ export function createDefaultAchievementState(): AchievementSystemState {
   };
 }
 
-export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
+export interface AchievementEvalSnapshot {
+  srMap: Record<number, CardSRState>;
+  taskMastery: Record<string, TaskMasteryStatus>;
+  activityLog: DailyActivityMap;
+  dailyGoal: number;
+  quizStats: QuizStats;
+  counters: AchievementCounters;
+}
+
+const RK_IDS = new Set(RK_QUESTIONS.map((c) => c.id));
+const EXAM_IDS = new Set(EXAM_QUESTIONS.map((c) => c.id));
+const MATAN_IDS = new Set(MATAN_QUESTIONS.map((c) => c.id));
+
+export function computeAchievementMetrics(snapshot: AchievementEvalSnapshot) {
+  const {srMap, taskMastery, activityLog, dailyGoal, quizStats, counters} =
+    snapshot;
+
+  let knownCards = 0;
+  let rainbowCards = 0;
+  let reviewedCardsInSr = 0;
+  let errorSlayerCards = 0;
+  let touchedRk = false;
+  let touchedExam = false;
+  let touchedMatan = false;
+  let rkKnown = 0;
+  let examKnown = 0;
+  let matanKnown = 0;
+  let aipTextbookKnown = 0;
+
+  for (const [idStr, sr] of Object.entries(srMap)) {
+    const id = Number(idStr);
+    if (sr.status !== 'unseen' || sr.lastGrade) {
+      reviewedCardsInSr++;
+      if (RK_IDS.has(id)) touchedRk = true;
+      if (EXAM_IDS.has(id)) touchedExam = true;
+      if (MATAN_IDS.has(id)) touchedMatan = true;
+    }
+    if (sr.status === 'known') {
+      knownCards++;
+      if (sr.lapses > 0) errorSlayerCards++;
+      if (RK_IDS.has(id)) rkKnown++;
+      if (EXAM_IDS.has(id)) examKnown++;
+      if (MATAN_IDS.has(id)) matanKnown++;
+      if (id >= 63 && id <= 90) aipTextbookKnown++;
+    }
+    if (getCardMasteryPercent(sr) >= 95) rainbowCards++;
+  }
+
+  let solvedTasks = 0;
+  for (const status of Object.values(taskMastery)) {
+    if (status === 'solved') solvedTasks++;
+  }
+
+  let activeDays = 0;
+  let maxSingleDayTotal = 0;
+  for (const entry of Object.values(activityLog)) {
+    const daySum = (entry.reviews || 0) + (entry.tasksSolved || 0);
+    if (daySum + (entry.focusMinutes || 0) > 0) {
+      activeDays++;
+    }
+    if (daySum > maxSingleDayTotal) {
+      maxSingleDayTotal = daySum;
+    }
+  }
+
+  const streaks = computeActivityStreaks(activityLog, dailyGoal);
+  const subjectsTouched =
+    (touchedRk ? 1 : 0) + (touchedExam ? 1 : 0) + (touchedMatan ? 1 : 0);
+
+  return {
+    totalReviews: Math.max(counters.totalReviews, reviewedCardsInSr),
+    bestEasyStreak: counters.bestEasyStreak,
+    easyStreak: counters.easyStreak,
+    bestGoodOrEasyStreak: counters.bestGoodOrEasyStreak,
+    goodOrEasyStreak: counters.goodOrEasyStreak,
+    dailyGoalHit: streaks.todayTotal >= Math.max(1, dailyGoal) ? 1 : 0,
+    todayTotal: Math.max(streaks.todayTotal, maxSingleDayTotal),
+    dailyGoal: Math.max(1, dailyGoal),
+    bestDayStreak: Math.max(streaks.currentStreak, streaks.bestStreak),
+    currentDayStreak: streaks.currentStreak,
+    activeDays,
+    knownCards,
+    rainbowCards,
+    errorSlayerCards,
+    matanKnown,
+    rkKnown,
+    examKnown,
+    aipTextbookKnown,
+    minKnownAcrossSubjects: Math.min(matanKnown, rkKnown, examKnown),
+    solvedTasks,
+    bestQuizPct: quizStats.bestScorePct,
+    quizzesCompleted: quizStats.completedCount,
+    quizQuestionsAnswered: quizStats.totalQuestionsAnswered,
+    totalFocusMinutes: streaks.totalFocusMinutes,
+    subjectsTouched,
+    nightStudyCount: counters.nightStudyCount,
+    spotTheLieWins: counters.spotTheLieWins,
+  };
+}
+
+export type AchievementMetricKey = keyof ReturnType<
+  typeof computeAchievementMetrics
+>;
+
+interface AchievementSpec {
+  id: string;
+  title: string;
+  description: string;
+  category: AchievementCategory;
+  rarity: AchievementRarity;
+  rewardXp: number;
+  target: number;
+  unitLabel: string;
+  icon: AchievementIcon;
+  metric: AchievementMetricKey;
+}
+
+const ACHIEVEMENT_SPECS: AchievementSpec[] = [
+  // ==================== 1. ПОВТОРЕНИЯ SM-2 (12) ====================
   {
     id: 'first_step',
     title: 'Первый шаг',
     description: 'Оценил первую карточку по алгоритму интервального повторения SM-2.',
     category: 'mastery',
     rarity: 'common',
-    rewardXp: 8,
+    rewardXp: 4,
     target: 1,
     unitLabel: 'повтор.',
     icon: 'sparkles',
+    metric: 'totalReviews',
+  },
+  {
+    id: 'reviews_10',
+    title: 'Прогрев памяти',
+    description: 'Выполнил 10 повторений карточек.',
+    category: 'mastery',
+    rarity: 'common',
+    rewardXp: 6,
+    target: 10,
+    unitLabel: 'повтор.',
+    icon: 'brain',
+    metric: 'totalReviews',
   },
   {
     id: 'reviews_25',
@@ -46,10 +180,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Выполнил 25 повторений карточек.',
     category: 'mastery',
     rarity: 'common',
-    rewardXp: 15,
+    rewardXp: 8,
     target: 25,
     unitLabel: 'повтор.',
     icon: 'brain',
+    metric: 'totalReviews',
+  },
+  {
+    id: 'reviews_50',
+    title: 'Полсотни кликов',
+    description: 'Выполнил 50 повторений карточек.',
+    category: 'mastery',
+    rarity: 'common',
+    rewardXp: 10,
+    target: 50,
+    unitLabel: 'повтор.',
+    icon: 'brain',
+    metric: 'totalReviews',
   },
   {
     id: 'reviews_100',
@@ -57,10 +204,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Выполнил 100 повторений карточек по системе SM-2.',
     category: 'mastery',
     rarity: 'rare',
-    rewardXp: 30,
+    rewardXp: 15,
     target: 100,
     unitLabel: 'повтор.',
     icon: 'brain',
+    metric: 'totalReviews',
+  },
+  {
+    id: 'reviews_200',
+    title: 'Устойчивый след',
+    description: 'Выполнил 200 повторений карточек.',
+    category: 'mastery',
+    rarity: 'rare',
+    rewardXp: 20,
+    target: 200,
+    unitLabel: 'повтор.',
+    icon: 'award',
+    metric: 'totalReviews',
   },
   {
     id: 'reviews_300',
@@ -68,10 +228,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Выполнил 300 повторений карточек.',
     category: 'mastery',
     rarity: 'epic',
-    rewardXp: 55,
+    rewardXp: 28,
     target: 300,
     unitLabel: 'повтор.',
     icon: 'trophy',
+    metric: 'totalReviews',
+  },
+  {
+    id: 'reviews_500',
+    title: 'Полутысячный рубеж',
+    description: 'Выполнил 500 повторений карточек.',
+    category: 'mastery',
+    rarity: 'epic',
+    rewardXp: 35,
+    target: 500,
+    unitLabel: 'повтор.',
+    icon: 'trophy',
+    metric: 'totalReviews',
   },
   {
     id: 'reviews_750',
@@ -79,10 +252,61 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Выполнил 750 повторений карточек.',
     category: 'mastery',
     rarity: 'legendary',
-    rewardXp: 95,
+    rewardXp: 48,
     target: 750,
     unitLabel: 'повтор.',
     icon: 'trophy',
+    metric: 'totalReviews',
+  },
+  {
+    id: 'reviews_1000',
+    title: 'Тысяча повторений SM-2',
+    description: 'Достиг отметки в 1000 повторений карточек.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 60,
+    target: 1000,
+    unitLabel: 'повтор.',
+    icon: 'star',
+    metric: 'totalReviews',
+  },
+  {
+    id: 'reviews_1500',
+    title: 'Архитектор долговременной памяти',
+    description: 'Выполнил 1500 повторений карточек.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 72,
+    target: 1500,
+    unitLabel: 'повтор.',
+    icon: 'trophy',
+    metric: 'totalReviews',
+  },
+  {
+    id: 'reviews_2500',
+    title: 'Абсолютный титан повторений',
+    description: 'Выполнил 2500 повторений карточек за подготовку.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 85,
+    target: 2500,
+    unitLabel: 'повтор.',
+    icon: 'sparkles',
+    metric: 'totalReviews',
+  },
+
+  // ==================== 2. СЕРИИ «ЛЕГКО» И ПОТОК (14) ====================
+  {
+    id: 'easy_streak_3',
+    title: 'Лёгкий старт',
+    description: 'Ответил на 3 карточки подряд на оценку «Легко».',
+    category: 'streak',
+    rarity: 'common',
+    rewardXp: 5,
+    target: 3,
+    unitLabel: 'подряд',
+    icon: 'zap',
+    metric: 'bestEasyStreak',
   },
   {
     id: 'easy_streak_5',
@@ -90,10 +314,11 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Изучил 5 карточек подряд на оценку «Легко».',
     category: 'streak',
     rarity: 'common',
-    rewardXp: 15,
+    rewardXp: 8,
     target: 5,
     unitLabel: 'подряд',
     icon: 'zap',
+    metric: 'bestEasyStreak',
   },
   {
     id: 'easy_streak_10',
@@ -101,10 +326,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Изучил 10 карточек подряд на оценку «Легко».',
     category: 'streak',
     rarity: 'rare',
-    rewardXp: 35,
+    rewardXp: 16,
     target: 10,
     unitLabel: 'подряд',
     icon: 'star',
+    metric: 'bestEasyStreak',
+  },
+  {
+    id: 'easy_streak_15',
+    title: 'Холодный расчёт',
+    description: 'Ответил на 15 карточек подряд на оценку «Легко».',
+    category: 'streak',
+    rarity: 'rare',
+    rewardXp: 24,
+    target: 15,
+    unitLabel: 'подряд',
+    icon: 'star',
+    metric: 'bestEasyStreak',
   },
   {
     id: 'easy_streak_20',
@@ -112,10 +350,59 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Изучил 20 карточек подряд на оценку «Легко».',
     category: 'streak',
     rarity: 'epic',
-    rewardXp: 65,
+    rewardXp: 34,
     target: 20,
     unitLabel: 'подряд',
     icon: 'sparkles',
+    metric: 'bestEasyStreak',
+  },
+  {
+    id: 'easy_streak_35',
+    title: 'Безупречная серия',
+    description: 'Изучил 35 карточек подряд на оценку «Легко».',
+    category: 'streak',
+    rarity: 'legendary',
+    rewardXp: 52,
+    target: 35,
+    unitLabel: 'подряд',
+    icon: 'sparkles',
+    metric: 'bestEasyStreak',
+  },
+  {
+    id: 'easy_streak_50',
+    title: 'Абсолютная чистота ответа',
+    description: 'Ответил на 50 карточек подряд на оценку «Легко».',
+    category: 'streak',
+    rarity: 'legendary',
+    rewardXp: 68,
+    target: 50,
+    unitLabel: 'подряд',
+    icon: 'trophy',
+    metric: 'bestEasyStreak',
+  },
+  {
+    id: 'flow_streak_5',
+    title: 'Поймал ритм',
+    description: 'Ответил на 5 карточек подряд на «Хорошо» или «Легко».',
+    category: 'streak',
+    rarity: 'common',
+    rewardXp: 5,
+    target: 5,
+    unitLabel: 'подряд',
+    icon: 'brain',
+    metric: 'bestGoodOrEasyStreak',
+  },
+  {
+    id: 'flow_streak_10',
+    title: 'Ровный ход',
+    description: 'Ответил на 10 карточек подряд на «Хорошо» или «Легко».',
+    category: 'streak',
+    rarity: 'common',
+    rewardXp: 8,
+    target: 10,
+    unitLabel: 'подряд',
+    icon: 'brain',
+    metric: 'bestGoodOrEasyStreak',
   },
   {
     id: 'flow_streak_15',
@@ -123,10 +410,11 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Ответил на 15 карточек подряд на «Хорошо» или «Легко».',
     category: 'streak',
     rarity: 'common',
-    rewardXp: 20,
+    rewardXp: 11,
     target: 15,
     unitLabel: 'подряд',
     icon: 'brain',
+    metric: 'bestGoodOrEasyStreak',
   },
   {
     id: 'flow_streak_20',
@@ -134,10 +422,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Ответил на 20 карточек подряд на «Хорошо» или «Легко».',
     category: 'streak',
     rarity: 'rare',
-    rewardXp: 40,
+    rewardXp: 18,
     target: 20,
     unitLabel: 'подряд',
     icon: 'brain',
+    metric: 'bestGoodOrEasyStreak',
+  },
+  {
+    id: 'flow_streak_30',
+    title: 'Без провалов',
+    description: 'Ответил на 30 карточек подряд на «Хорошо» или «Легко».',
+    category: 'streak',
+    rarity: 'epic',
+    rewardXp: 28,
+    target: 30,
+    unitLabel: 'подряд',
+    icon: 'zap',
+    metric: 'bestGoodOrEasyStreak',
   },
   {
     id: 'flow_streak_40',
@@ -145,21 +446,109 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Ответил на 40 карточек подряд без оценок «Не помню» и «Сложно».',
     category: 'streak',
     rarity: 'legendary',
-    rewardXp: 85,
+    rewardXp: 42,
     target: 40,
     unitLabel: 'подряд',
     icon: 'zap',
+    metric: 'bestGoodOrEasyStreak',
   },
+  {
+    id: 'flow_streak_75',
+    title: 'Неудержимый марафон',
+    description: 'Ответил на 75 карточек подряд без единого промаха.',
+    category: 'streak',
+    rarity: 'legendary',
+    rewardXp: 65,
+    target: 75,
+    unitLabel: 'подряд',
+    icon: 'trophy',
+    metric: 'bestGoodOrEasyStreak',
+  },
+
+  // ==================== 3. ДНЕВНЫЕ РЕКОРДЫ, СТРИКИ И КАЛЕНДАРЬ (18) ====================
   {
     id: 'daily_goal_done',
     title: 'Норма дня выполнена',
     description: 'Достиг дневной цели по карточкам и решённым задачам.',
     category: 'streak',
     rarity: 'common',
-    rewardXp: 20,
+    rewardXp: 10,
     target: 1,
     unitLabel: 'цель',
     icon: 'target',
+    metric: 'dailyGoalHit',
+  },
+  {
+    id: 'daily_burst_15',
+    title: 'Пятнашка за день',
+    description: 'Выполнил 15 повторений/задач за один день.',
+    category: 'streak',
+    rarity: 'common',
+    rewardXp: 8,
+    target: 15,
+    unitLabel: 'за день',
+    icon: 'zap',
+    metric: 'todayTotal',
+  },
+  {
+    id: 'daily_burst_30',
+    title: 'Ударная тридцатка',
+    description: 'Выполнил 30 повторений/задач за один день.',
+    category: 'streak',
+    rarity: 'rare',
+    rewardXp: 16,
+    target: 30,
+    unitLabel: 'за день',
+    icon: 'flame',
+    metric: 'todayTotal',
+  },
+  {
+    id: 'daily_burst_50',
+    title: 'Полсотни за сутки',
+    description: 'Выполнил 50 повторений/задач за один день.',
+    category: 'streak',
+    rarity: 'epic',
+    rewardXp: 28,
+    target: 50,
+    unitLabel: 'за день',
+    icon: 'flame',
+    metric: 'todayTotal',
+  },
+  {
+    id: 'daily_burst_80',
+    title: 'Турбо-подготовка',
+    description: 'Выполнил 80 повторений/задач за один день.',
+    category: 'streak',
+    rarity: 'epic',
+    rewardXp: 40,
+    target: 80,
+    unitLabel: 'за день',
+    icon: 'zap',
+    metric: 'todayTotal',
+  },
+  {
+    id: 'daily_burst_120',
+    title: 'Легенда предэкзаменационной ночи',
+    description: 'Выполнил 120 повторений/задач за один день.',
+    category: 'streak',
+    rarity: 'legendary',
+    rewardXp: 58,
+    target: 120,
+    unitLabel: 'за день',
+    icon: 'trophy',
+    metric: 'todayTotal',
+  },
+  {
+    id: 'streak_2_days',
+    title: 'Два дня в строю',
+    description: 'Занимаешься 2 дня подряд без пропусков.',
+    category: 'streak',
+    rarity: 'common',
+    rewardXp: 8,
+    target: 2,
+    unitLabel: 'дн.',
+    icon: 'flame',
+    metric: 'bestDayStreak',
   },
   {
     id: 'streak_3_days',
@@ -167,10 +556,11 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Занимаешься 3 дня подряд без пропусков.',
     category: 'streak',
     rarity: 'common',
-    rewardXp: 25,
+    rewardXp: 12,
     target: 3,
     unitLabel: 'дн.',
     icon: 'flame',
+    metric: 'bestDayStreak',
   },
   {
     id: 'streak_5_days',
@@ -178,10 +568,11 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Занимаешься 5 дней подряд без пропусков.',
     category: 'streak',
     rarity: 'rare',
-    rewardXp: 40,
+    rewardXp: 20,
     target: 5,
     unitLabel: 'дн.',
     icon: 'flame',
+    metric: 'bestDayStreak',
   },
   {
     id: 'streak_7_days',
@@ -189,10 +580,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Занимаешься 7 дней без пропусков.',
     category: 'streak',
     rarity: 'epic',
-    rewardXp: 65,
+    rewardXp: 32,
     target: 7,
     unitLabel: 'дн.',
     icon: 'flame',
+    metric: 'bestDayStreak',
+  },
+  {
+    id: 'streak_10_days',
+    title: 'Десятидневный напор',
+    description: 'Занимаешься 10 дней подряд без пропусков.',
+    category: 'streak',
+    rarity: 'epic',
+    rewardXp: 42,
+    target: 10,
+    unitLabel: 'дн.',
+    icon: 'flame',
+    metric: 'bestDayStreak',
   },
   {
     id: 'streak_14_days',
@@ -200,10 +604,97 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Занимаешься 14 дней подряд без единого пропуска.',
     category: 'streak',
     rarity: 'legendary',
-    rewardXp: 110,
+    rewardXp: 55,
     target: 14,
     unitLabel: 'дн.',
     icon: 'trophy',
+    metric: 'bestDayStreak',
+  },
+  {
+    id: 'streak_21_days',
+    title: 'Привычка отличника (21 день)',
+    description: 'Удерживаешь непрерывную серию 21 день подряд.',
+    category: 'streak',
+    rarity: 'legendary',
+    rewardXp: 70,
+    target: 21,
+    unitLabel: 'дн.',
+    icon: 'trophy',
+    metric: 'bestDayStreak',
+  },
+  {
+    id: 'streak_30_days',
+    title: 'Месяц без единого срыва',
+    description: 'Удерживаешь серию подготовки 30 дней подряд.',
+    category: 'streak',
+    rarity: 'legendary',
+    rewardXp: 85,
+    target: 30,
+    unitLabel: 'дн.',
+    icon: 'star',
+    metric: 'bestDayStreak',
+  },
+  {
+    id: 'active_days_5',
+    title: 'Пять учебных дней',
+    description: 'Провёл подготовку минимум в 5 разных дней по календарю.',
+    category: 'streak',
+    rarity: 'common',
+    rewardXp: 10,
+    target: 5,
+    unitLabel: 'дн.',
+    icon: 'clock',
+    metric: 'activeDays',
+  },
+  {
+    id: 'active_days_12',
+    title: 'Двенадцать сессий',
+    description: 'Провёл подготовку минимум в 12 разных дней по календарю.',
+    category: 'streak',
+    rarity: 'rare',
+    rewardXp: 22,
+    target: 12,
+    unitLabel: 'дн.',
+    icon: 'clock',
+    metric: 'activeDays',
+  },
+  {
+    id: 'active_days_25',
+    title: 'Ветеран семестра',
+    description: 'Занимался подготовкой в 25 разных дней по календарю.',
+    category: 'streak',
+    rarity: 'epic',
+    rewardXp: 38,
+    target: 25,
+    unitLabel: 'дн.',
+    icon: 'award',
+    metric: 'activeDays',
+  },
+  {
+    id: 'active_days_45',
+    title: 'Хроника зимней сессии',
+    description: 'Занимался подготовкой в 45 разных дней по календарю.',
+    category: 'streak',
+    rarity: 'legendary',
+    rewardXp: 62,
+    target: 45,
+    unitLabel: 'дн.',
+    icon: 'trophy',
+    metric: 'activeDays',
+  },
+
+  // ==================== 4. ВЫУЧЕННЫЕ КАРТОЧКИ, 95%+ И ОШИБКИ (23) ====================
+  {
+    id: 'mastered_3',
+    title: 'Первые три билета',
+    description: 'Выучил 3 карточки до статуса «Знаю».',
+    category: 'mastery',
+    rarity: 'common',
+    rewardXp: 5,
+    target: 3,
+    unitLabel: 'карт.',
+    icon: 'award',
+    metric: 'knownCards',
   },
   {
     id: 'mastered_10',
@@ -211,10 +702,11 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Выучил 10 карточек до статуса «Знаю».',
     category: 'mastery',
     rarity: 'common',
-    rewardXp: 15,
+    rewardXp: 8,
     target: 10,
     unitLabel: 'карт.',
     icon: 'award',
+    metric: 'knownCards',
   },
   {
     id: 'mastered_25',
@@ -222,10 +714,11 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Выучил 25 карточек до статуса «Знаю».',
     category: 'mastery',
     rarity: 'rare',
-    rewardXp: 30,
+    rewardXp: 15,
     target: 25,
     unitLabel: 'карт.',
     icon: 'award',
+    metric: 'knownCards',
   },
   {
     id: 'mastered_50',
@@ -233,10 +726,11 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Выучил 50 карточек до статуса «Знаю».',
     category: 'mastery',
     rarity: 'rare',
-    rewardXp: 45,
+    rewardXp: 24,
     target: 50,
     unitLabel: 'карт.',
     icon: 'award',
+    metric: 'knownCards',
   },
   {
     id: 'mastered_75',
@@ -244,10 +738,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Выучил 75 карточек по всем предметам.',
     category: 'mastery',
     rarity: 'epic',
-    rewardXp: 70,
+    rewardXp: 34,
     target: 75,
     unitLabel: 'карт.',
     icon: 'trophy',
+    metric: 'knownCards',
+  },
+  {
+    id: 'mastered_100',
+    title: 'Сотня в зачётке',
+    description: 'Выучил 100 карточек по всем предметам.',
+    category: 'mastery',
+    rarity: 'epic',
+    rewardXp: 42,
+    target: 100,
+    unitLabel: 'карт.',
+    icon: 'trophy',
+    metric: 'knownCards',
   },
   {
     id: 'mastered_120',
@@ -255,10 +762,59 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Выучил 120 карточек по всем предметам.',
     category: 'mastery',
     rarity: 'legendary',
-    rewardXp: 100,
+    rewardXp: 50,
     target: 120,
     unitLabel: 'карт.',
     icon: 'trophy',
+    metric: 'knownCards',
+  },
+  {
+    id: 'mastered_160',
+    title: 'Профессорский запас',
+    description: 'Выучил 160 карточек по всем предметам.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 60,
+    target: 160,
+    unitLabel: 'карт.',
+    icon: 'star',
+    metric: 'knownCards',
+  },
+  {
+    id: 'mastered_210',
+    title: 'Магистр ФН и ИУ',
+    description: 'Выучил 210 карточек по всем предметам.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 72,
+    target: 210,
+    unitLabel: 'карт.',
+    icon: 'trophy',
+    metric: 'knownCards',
+  },
+  {
+    id: 'mastered_275',
+    title: 'Полная библиотека сессии',
+    description: 'Выучил 275 карточек по всем предметам.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 85,
+    target: 275,
+    unitLabel: 'карт.',
+    icon: 'sparkles',
+    metric: 'knownCards',
+  },
+  {
+    id: 'rainbow_master_3',
+    title: 'Первые искры 95%+',
+    description: 'Довёл 3 карточки до идеального уровня 95%+.',
+    category: 'mastery',
+    rarity: 'common',
+    rewardXp: 10,
+    target: 3,
+    unitLabel: 'карт.',
+    icon: 'sparkles',
+    metric: 'rainbowCards',
   },
   {
     id: 'rainbow_master_10',
@@ -266,10 +822,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Довёл 10 карточек до идеального уровня 95%+.',
     category: 'mastery',
     rarity: 'rare',
-    rewardXp: 45,
+    rewardXp: 22,
     target: 10,
     unitLabel: 'карт.',
     icon: 'sparkles',
+    metric: 'rainbowCards',
+  },
+  {
+    id: 'rainbow_master_20',
+    title: 'Кристальная коллекция',
+    description: 'Довёл 20 карточек до идеального уровня 95%+.',
+    category: 'mastery',
+    rarity: 'rare',
+    rewardXp: 30,
+    target: 20,
+    unitLabel: 'карт.',
+    icon: 'sparkles',
+    metric: 'rainbowCards',
   },
   {
     id: 'rainbow_master_30',
@@ -277,10 +846,11 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Довёл 30 карточек до идеального уровня 95%+.',
     category: 'mastery',
     rarity: 'epic',
-    rewardXp: 80,
+    rewardXp: 40,
     target: 30,
     unitLabel: 'карт.',
     icon: 'sparkles',
+    metric: 'rainbowCards',
   },
   {
     id: 'rainbow_master_60',
@@ -288,10 +858,375 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Довёл 60 карточек до идеального уровня 95%+.',
     category: 'mastery',
     rarity: 'legendary',
-    rewardXp: 120,
+    rewardXp: 58,
     target: 60,
     unitLabel: 'карт.',
     icon: 'sparkles',
+    metric: 'rainbowCards',
+  },
+  {
+    id: 'rainbow_master_100',
+    title: 'Сто кристаллов памяти',
+    description: 'Довёл 100 карточек до идеального уровня 95%+.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 75,
+    target: 100,
+    unitLabel: 'карт.',
+    icon: 'trophy',
+    metric: 'rainbowCards',
+  },
+  {
+    id: 'rainbow_master_150',
+    title: 'Вечная память (150× 95%+)',
+    description: 'Довёл 150 карточек до идеального уровня 95%+.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 90,
+    target: 150,
+    unitLabel: 'карт.',
+    icon: 'star',
+    metric: 'rainbowCards',
+  },
+  {
+    id: 'error_slayer_1',
+    title: 'Первая победа над ошибкой',
+    description: 'Довёл до «Знаю» карточку, на которой ранее ошибался.',
+    category: 'mastery',
+    rarity: 'common',
+    rewardXp: 6,
+    target: 1,
+    unitLabel: 'карт.',
+    icon: 'check',
+    metric: 'errorSlayerCards',
+  },
+  {
+    id: 'error_slayer_5',
+    title: 'Работа над пробелами',
+    description: 'Закрыл до статуса «Знаю» 5 ранее проваленных карточек.',
+    category: 'mastery',
+    rarity: 'common',
+    rewardXp: 12,
+    target: 5,
+    unitLabel: 'карт.',
+    icon: 'check',
+    metric: 'errorSlayerCards',
+  },
+  {
+    id: 'error_slayer_12',
+    title: 'Ликвидатор слабых мест',
+    description: 'Закрыл до статуса «Знаю» 12 ранее проблемных карточек.',
+    category: 'mastery',
+    rarity: 'rare',
+    rewardXp: 22,
+    target: 12,
+    unitLabel: 'карт.',
+    icon: 'award',
+    metric: 'errorSlayerCards',
+  },
+  {
+    id: 'error_slayer_25',
+    title: 'Феникс теории',
+    description: 'Закрыл до статуса «Знаю» 25 ранее проблемных карточек.',
+    category: 'mastery',
+    rarity: 'epic',
+    rewardXp: 36,
+    target: 25,
+    unitLabel: 'карт.',
+    icon: 'flame',
+    metric: 'errorSlayerCards',
+  },
+  {
+    id: 'error_slayer_50',
+    title: 'Без единого слабого звена',
+    description: 'Закрыл до статуса «Знаю» 50 ранее проваленных карточек.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 58,
+    target: 50,
+    unitLabel: 'карт.',
+    icon: 'trophy',
+    metric: 'errorSlayerCards',
+  },
+  {
+    id: 'polymath_all_3_deep',
+    title: 'Тройной паритет',
+    description: 'Выучил минимум по 15 карточек в каждом предмете: Матан, Ангем и АИП.',
+    category: 'special',
+    rarity: 'epic',
+    rewardXp: 42,
+    target: 15,
+    unitLabel: 'карт./предм.',
+    icon: 'layers',
+    metric: 'minKnownAcrossSubjects',
+  },
+
+  // ==================== 5. ПРОГРЕСС ПО ПРЕДМЕТАМ (20) ====================
+  {
+    id: 'matan_known_5',
+    title: 'Матан · Вход в пределы',
+    description: 'Выучил 5 карточек по Математическому анализу.',
+    category: 'mastery',
+    rarity: 'common',
+    rewardXp: 6,
+    target: 5,
+    unitLabel: 'карт.',
+    icon: 'brain',
+    metric: 'matanKnown',
+  },
+  {
+    id: 'matan_known_20',
+    title: 'Матан · Эпсилон-дельта',
+    description: 'Выучил 20 карточек по Математическому анализу.',
+    category: 'mastery',
+    rarity: 'rare',
+    rewardXp: 15,
+    target: 20,
+    unitLabel: 'карт.',
+    icon: 'brain',
+    metric: 'matanKnown',
+  },
+  {
+    id: 'matan_known_45',
+    title: 'Матан · Формула Тейлора',
+    description: 'Выучил 45 карточек по Математическому анализу.',
+    category: 'mastery',
+    rarity: 'epic',
+    rewardXp: 28,
+    target: 45,
+    unitLabel: 'карт.',
+    icon: 'award',
+    metric: 'matanKnown',
+  },
+  {
+    id: 'matan_known_80',
+    title: 'Матан · Покоритель ФН-12',
+    description: 'Выучил 80 карточек по Математическому анализу.',
+    category: 'mastery',
+    rarity: 'epic',
+    rewardXp: 42,
+    target: 80,
+    unitLabel: 'карт.',
+    icon: 'trophy',
+    metric: 'matanKnown',
+  },
+  {
+    id: 'matan_known_110',
+    title: 'Матан · Полный курс 1 семестра',
+    description: 'Выучил 110 карточек по Математическому анализу.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 60,
+    target: 110,
+    unitLabel: 'карт.',
+    icon: 'star',
+    metric: 'matanKnown',
+  },
+  {
+    id: 'rk_known_5',
+    title: 'Ангем · Векторный старт',
+    description: 'Выучил 5 карточек по Аналитической геометрии.',
+    category: 'mastery',
+    rarity: 'common',
+    rewardXp: 6,
+    target: 5,
+    unitLabel: 'карт.',
+    icon: 'layers',
+    metric: 'rkKnown',
+  },
+  {
+    id: 'rk_known_20',
+    title: 'Ангем · Линейная независимость',
+    description: 'Выучил 20 карточек по Аналитической геометрии.',
+    category: 'mastery',
+    rarity: 'rare',
+    rewardXp: 15,
+    target: 20,
+    unitLabel: 'карт.',
+    icon: 'layers',
+    metric: 'rkKnown',
+  },
+  {
+    id: 'rk_known_45',
+    title: 'Ангем · Матрицы и квадрики',
+    description: 'Выучил 45 карточек по Аналитической геометрии.',
+    category: 'mastery',
+    rarity: 'epic',
+    rewardXp: 28,
+    target: 45,
+    unitLabel: 'карт.',
+    icon: 'award',
+    metric: 'rkKnown',
+  },
+  {
+    id: 'rk_known_75',
+    title: 'Ангем · РК 1 + РК 2 + Экзамен',
+    description: 'Выучил 75 карточек по Аналитической геометрии.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 48,
+    target: 75,
+    unitLabel: 'карт.',
+    icon: 'trophy',
+    metric: 'rkKnown',
+  },
+  {
+    id: 'rk_known_95',
+    title: 'Ангем · Мастер пространства ℝ³',
+    description: 'Выучил 95 карточек по Аналитической геометрии.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 62,
+    target: 95,
+    unitLabel: 'карт.',
+    icon: 'star',
+    metric: 'rkKnown',
+  },
+  {
+    id: 'aip_known_5',
+    title: 'АИП · Hello, C++!',
+    description: 'Выучил 5 карточек по Алгоритмизации и программированию.',
+    category: 'mastery',
+    rarity: 'common',
+    rewardXp: 6,
+    target: 5,
+    unitLabel: 'карт.',
+    icon: 'zap',
+    metric: 'examKnown',
+  },
+  {
+    id: 'aip_known_20',
+    title: 'АИП · Указатели и память',
+    description: 'Выучил 20 карточек по АИП и C++.',
+    category: 'mastery',
+    rarity: 'rare',
+    rewardXp: 15,
+    target: 20,
+    unitLabel: 'карт.',
+    icon: 'zap',
+    metric: 'examKnown',
+  },
+  {
+    id: 'aip_known_45',
+    title: 'АИП · Половина билетов C++',
+    description: 'Выучил 45 карточек по АИП и C++.',
+    category: 'mastery',
+    rarity: 'epic',
+    rewardXp: 28,
+    target: 45,
+    unitLabel: 'карт.',
+    icon: 'award',
+    metric: 'examKnown',
+  },
+  {
+    id: 'aip_known_70',
+    title: 'АИП · Архитектор структур данных',
+    description: 'Выучил 70 карточек по АИП и C++.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 46,
+    target: 70,
+    unitLabel: 'карт.',
+    icon: 'trophy',
+    metric: 'examKnown',
+  },
+  {
+    id: 'aip_known_85',
+    title: 'АИП · Компилятор в голове',
+    description: 'Выучил 85 карточек по АИП и C++.',
+    category: 'mastery',
+    rarity: 'legendary',
+    rewardXp: 60,
+    target: 85,
+    unitLabel: 'карт.',
+    icon: 'star',
+    metric: 'examKnown',
+  },
+  {
+    id: 'cpp_textbook_5',
+    title: 'Учебник C++ · Первые главы',
+    description: 'Выучил 5 контрольных вопросов из учебника C++ (карточки 63–90).',
+    category: 'mastery',
+    rarity: 'common',
+    rewardXp: 8,
+    target: 5,
+    unitLabel: 'карт.',
+    icon: 'check',
+    metric: 'aipTextbookKnown',
+  },
+  {
+    id: 'cpp_textbook_15',
+    title: 'Учебник C++ · Модули РК 1–2',
+    description: 'Выучил 15 контрольных вопросов из учебника C++ (карточки 63–90).',
+    category: 'mastery',
+    rarity: 'rare',
+    rewardXp: 18,
+    target: 15,
+    unitLabel: 'карт.',
+    icon: 'award',
+    metric: 'aipTextbookKnown',
+  },
+  {
+    id: 'cpp_textbook_28',
+    title: 'Учебник C++ · Полное прохождение',
+    description: 'Выучил все 28 контрольных вопросов из учебника C++ (карточки 63–90).',
+    category: 'mastery',
+    rarity: 'epic',
+    rewardXp: 35,
+    target: 28,
+    unitLabel: 'карт.',
+    icon: 'trophy',
+    metric: 'aipTextbookKnown',
+  },
+  {
+    id: 'polymath_all_3_5',
+    title: 'Сбалансированный студент',
+    description: 'Выучил минимум по 5 карточек в Матане, Ангеме и АИП.',
+    category: 'special',
+    rarity: 'rare',
+    rewardXp: 18,
+    target: 5,
+    unitLabel: 'карт./предм.',
+    icon: 'layers',
+    metric: 'minKnownAcrossSubjects',
+  },
+  {
+    id: 'polymath_all_3_35',
+    title: 'Абсолютный полимат ИУ / ФН',
+    description: 'Выучил минимум по 35 карточек в каждом из трёх предметов.',
+    category: 'special',
+    rarity: 'legendary',
+    rewardXp: 70,
+    target: 35,
+    unitLabel: 'карт./предм.',
+    icon: 'trophy',
+    metric: 'minKnownAcrossSubjects',
+  },
+
+  // ==================== 6. ПРАКТИЧЕСКИЕ ЗАДАЧИ (10) ====================
+  {
+    id: 'tasks_1',
+    title: 'Первая решённая задача',
+    description: 'Решил первую практическую задачу без подсказок.',
+    category: 'practice',
+    rarity: 'common',
+    rewardXp: 5,
+    target: 1,
+    unitLabel: 'задач',
+    icon: 'check',
+    metric: 'solvedTasks',
+  },
+  {
+    id: 'tasks_3',
+    title: 'Разогрев у доски',
+    description: 'Решил 3 практические задачи без подсказок.',
+    category: 'practice',
+    rarity: 'common',
+    rewardXp: 8,
+    target: 3,
+    unitLabel: 'задач',
+    icon: 'check',
+    metric: 'solvedTasks',
   },
   {
     id: 'tasks_5',
@@ -299,10 +1234,11 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Решил 5 практических задач без подсказок.',
     category: 'practice',
     rarity: 'common',
-    rewardXp: 20,
+    rewardXp: 10,
     target: 5,
     unitLabel: 'задач',
     icon: 'check',
+    metric: 'solvedTasks',
   },
   {
     id: 'tasks_10',
@@ -310,10 +1246,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Решил 10 практических задач без подсказок.',
     category: 'practice',
     rarity: 'rare',
-    rewardXp: 35,
+    rewardXp: 18,
     target: 10,
     unitLabel: 'задач',
     icon: 'check',
+    metric: 'solvedTasks',
+  },
+  {
+    id: 'tasks_18',
+    title: 'Семинарский лидер',
+    description: 'Решил 18 практических задач без подсказок.',
+    category: 'practice',
+    rarity: 'rare',
+    rewardXp: 24,
+    target: 18,
+    unitLabel: 'задач',
+    icon: 'award',
+    metric: 'solvedTasks',
   },
   {
     id: 'tasks_25',
@@ -321,10 +1270,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Решил 25 практических задач без подсказок.',
     category: 'practice',
     rarity: 'epic',
-    rewardXp: 65,
+    rewardXp: 34,
     target: 25,
     unitLabel: 'задач',
     icon: 'check',
+    metric: 'solvedTasks',
+  },
+  {
+    id: 'tasks_35',
+    title: 'Гроза контрольных',
+    description: 'Решил 35 практических задач без подсказок.',
+    category: 'practice',
+    rarity: 'epic',
+    rewardXp: 44,
+    target: 35,
+    unitLabel: 'задач',
+    icon: 'award',
+    metric: 'solvedTasks',
   },
   {
     id: 'tasks_45',
@@ -332,10 +1294,49 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Решил 45 практических задач без подсказок.',
     category: 'practice',
     rarity: 'legendary',
-    rewardXp: 105,
+    rewardXp: 55,
     target: 45,
     unitLabel: 'задач',
     icon: 'trophy',
+    metric: 'solvedTasks',
+  },
+  {
+    id: 'tasks_60',
+    title: 'Мастер задачников',
+    description: 'Решил 60 практических задач без подсказок.',
+    category: 'practice',
+    rarity: 'legendary',
+    rewardXp: 68,
+    target: 60,
+    unitLabel: 'задач',
+    icon: 'trophy',
+    metric: 'solvedTasks',
+  },
+  {
+    id: 'tasks_80',
+    title: 'Живой решебник Бауманки',
+    description: 'Решил 80 практических задач без подсказок.',
+    category: 'practice',
+    rarity: 'legendary',
+    rewardXp: 82,
+    target: 80,
+    unitLabel: 'задач',
+    icon: 'star',
+    metric: 'solvedTasks',
+  },
+
+  // ==================== 7. «НАЙДИ ЛОЖЬ» И БЛИЦ-ТЕСТЫ (17) ====================
+  {
+    id: 'spot_lie_1',
+    title: 'Первая пойманная уловка',
+    description: 'Разоблачил 1 ложное утверждение в тренажёре «Найди ложь».',
+    category: 'practice',
+    rarity: 'common',
+    rewardXp: 5,
+    target: 1,
+    unitLabel: 'раунд.',
+    icon: 'target',
+    metric: 'spotTheLieWins',
   },
   {
     id: 'spot_lie_3',
@@ -343,10 +1344,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Разоблачил 3 математические уловки в тренажёре «Найди ложь».',
     category: 'practice',
     rarity: 'common',
-    rewardXp: 20,
+    rewardXp: 10,
     target: 3,
     unitLabel: 'раунд.',
     icon: 'target',
+    metric: 'spotTheLieWins',
+  },
+  {
+    id: 'spot_lie_6',
+    title: 'Острый глаз',
+    description: 'Разоблачил 6 ложных утверждений в тренажёре «Найди ложь».',
+    category: 'practice',
+    rarity: 'common',
+    rewardXp: 14,
+    target: 6,
+    unitLabel: 'раунд.',
+    icon: 'target',
+    metric: 'spotTheLieWins',
   },
   {
     id: 'spot_lie_10',
@@ -354,10 +1368,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Разоблачил 10 ложных утверждений в тренажёре «Найди ложь».',
     category: 'practice',
     rarity: 'rare',
-    rewardXp: 40,
+    rewardXp: 20,
     target: 10,
     unitLabel: 'раунд.',
     icon: 'target',
+    metric: 'spotTheLieWins',
+  },
+  {
+    id: 'spot_lie_18',
+    title: 'Охотник за багами',
+    description: 'Разоблачил 18 ложных утверждений в тренажёре «Найди ложь».',
+    category: 'practice',
+    rarity: 'rare',
+    rewardXp: 28,
+    target: 18,
+    unitLabel: 'раунд.',
+    icon: 'star',
+    metric: 'spotTheLieWins',
   },
   {
     id: 'spot_lie_25',
@@ -365,10 +1392,119 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Разоблачил 25 ложных утверждений в тренажёре «Найди ложь».',
     category: 'practice',
     rarity: 'epic',
-    rewardXp: 70,
+    rewardXp: 36,
     target: 25,
     unitLabel: 'раунд.',
     icon: 'star',
+    metric: 'spotTheLieWins',
+  },
+  {
+    id: 'spot_lie_50',
+    title: 'Неподкупный рецензент',
+    description: 'Разоблачил 50 ложных утверждений в тренажёре «Найди ложь».',
+    category: 'practice',
+    rarity: 'legendary',
+    rewardXp: 58,
+    target: 50,
+    unitLabel: 'раунд.',
+    icon: 'trophy',
+    metric: 'spotTheLieWins',
+  },
+  {
+    id: 'quiz_run_1',
+    title: 'Первый блиц',
+    description: 'Завершил 1 блиц-тест.',
+    category: 'practice',
+    rarity: 'common',
+    rewardXp: 6,
+    target: 1,
+    unitLabel: 'тест.',
+    icon: 'zap',
+    metric: 'quizzesCompleted',
+  },
+  {
+    id: 'quiz_run_5',
+    title: 'Серия блицев (5)',
+    description: 'Завершил 5 блиц-тестов.',
+    category: 'practice',
+    rarity: 'common',
+    rewardXp: 12,
+    target: 5,
+    unitLabel: 'тест.',
+    icon: 'zap',
+    metric: 'quizzesCompleted',
+  },
+  {
+    id: 'quiz_run_15',
+    title: 'Завсегдатай блиц-арены (15)',
+    description: 'Завершил 15 блиц-тестов.',
+    category: 'practice',
+    rarity: 'rare',
+    rewardXp: 24,
+    target: 15,
+    unitLabel: 'тест.',
+    icon: 'award',
+    metric: 'quizzesCompleted',
+  },
+  {
+    id: 'quiz_run_35',
+    title: 'Ветеран блиц-тестов (35)',
+    description: 'Завершил 35 блиц-тестов.',
+    category: 'practice',
+    rarity: 'epic',
+    rewardXp: 42,
+    target: 35,
+    unitLabel: 'тест.',
+    icon: 'trophy',
+    metric: 'quizzesCompleted',
+  },
+  {
+    id: 'quiz_q_50',
+    title: '50 вопросов блица',
+    description: 'Ответил суммарно на 50 вопросов в блиц-тестах.',
+    category: 'practice',
+    rarity: 'common',
+    rewardXp: 10,
+    target: 50,
+    unitLabel: 'вопр.',
+    icon: 'target',
+    metric: 'quizQuestionsAnswered',
+  },
+  {
+    id: 'quiz_q_200',
+    title: '200 вопросов блица',
+    description: 'Ответил суммарно на 200 вопросов в блиц-тестах.',
+    category: 'practice',
+    rarity: 'rare',
+    rewardXp: 24,
+    target: 200,
+    unitLabel: 'вопр.',
+    icon: 'target',
+    metric: 'quizQuestionsAnswered',
+  },
+  {
+    id: 'quiz_q_500',
+    title: '500 вопросов блица',
+    description: 'Ответил суммарно на 500 вопросов в блиц-тестах.',
+    category: 'practice',
+    rarity: 'epic',
+    rewardXp: 44,
+    target: 500,
+    unitLabel: 'вопр.',
+    icon: 'trophy',
+    metric: 'quizQuestionsAnswered',
+  },
+  {
+    id: 'quiz_75',
+    title: 'Уверенный блиц (75%+)',
+    description: 'Набрал 75% или выше в прохождении блиц-теста.',
+    category: 'practice',
+    rarity: 'common',
+    rewardXp: 10,
+    target: 75,
+    unitLabel: '%',
+    icon: 'target',
+    metric: 'bestQuizPct',
   },
   {
     id: 'quiz_ace',
@@ -376,10 +1512,49 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Набрал 90% или выше в прохождении блиц-теста.',
     category: 'practice',
     rarity: 'rare',
-    rewardXp: 35,
+    rewardXp: 18,
     target: 90,
     unitLabel: '%',
     icon: 'target',
+    metric: 'bestQuizPct',
+  },
+  {
+    id: 'quiz_perfect_100',
+    title: 'Безупречный блиц (100%)',
+    description: 'Набрал ровно 100% правильных ответов в блиц-тесте.',
+    category: 'practice',
+    rarity: 'epic',
+    rewardXp: 35,
+    target: 100,
+    unitLabel: '%',
+    icon: 'star',
+    metric: 'bestQuizPct',
+  },
+
+  // ==================== 8. ФОКУС-ТАЙМЕР И ОСОБЫЕ (12) ====================
+  {
+    id: 'focus_15',
+    title: 'Первые 15 минут фокуса',
+    description: 'Провёл суммарно 15 минут в таймере фокуса.',
+    category: 'practice',
+    rarity: 'common',
+    rewardXp: 6,
+    target: 15,
+    unitLabel: 'мин',
+    icon: 'clock',
+    metric: 'totalFocusMinutes',
+  },
+  {
+    id: 'focus_30',
+    title: 'Полчаса тишины',
+    description: 'Провёл суммарно 30 минут в таймере фокуса.',
+    category: 'practice',
+    rarity: 'common',
+    rewardXp: 10,
+    target: 30,
+    unitLabel: 'мин',
+    icon: 'clock',
+    metric: 'totalFocusMinutes',
   },
   {
     id: 'focus_60',
@@ -387,10 +1562,23 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Провёл суммарно 60 минут в таймере фокуса.',
     category: 'practice',
     rarity: 'rare',
-    rewardXp: 30,
+    rewardXp: 16,
     target: 60,
     unitLabel: 'мин',
     icon: 'clock',
+    metric: 'totalFocusMinutes',
+  },
+  {
+    id: 'focus_120',
+    title: 'Два часа без отвлечений',
+    description: 'Провёл суммарно 120 минут в таймере фокуса.',
+    category: 'practice',
+    rarity: 'rare',
+    rewardXp: 24,
+    target: 120,
+    unitLabel: 'мин',
+    icon: 'clock',
+    metric: 'totalFocusMinutes',
   },
   {
     id: 'focus_240',
@@ -398,10 +1586,35 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Провёл суммарно 240 минут в таймере фокуса.',
     category: 'practice',
     rarity: 'epic',
-    rewardXp: 65,
+    rewardXp: 34,
     target: 240,
     unitLabel: 'мин',
     icon: 'clock',
+    metric: 'totalFocusMinutes',
+  },
+  {
+    id: 'focus_480',
+    title: 'Восьмичасовая смена знаний',
+    description: 'Провёл суммарно 480 минут в таймере фокуса.',
+    category: 'practice',
+    rarity: 'legendary',
+    rewardXp: 52,
+    target: 480,
+    unitLabel: 'мин',
+    icon: 'clock',
+    metric: 'totalFocusMinutes',
+  },
+  {
+    id: 'focus_900',
+    title: 'Пятнадцать часов дзена',
+    description: 'Провёл суммарно 900 минут в таймере фокуса.',
+    category: 'practice',
+    rarity: 'legendary',
+    rewardXp: 72,
+    target: 900,
+    unitLabel: 'мин',
+    icon: 'trophy',
+    metric: 'totalFocusMinutes',
   },
   {
     id: 'all_subjects',
@@ -409,10 +1622,11 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Повторил хотя бы по одной карточке во всех 3 предметах: Ангем, АИП и Матан.',
     category: 'special',
     rarity: 'rare',
-    rewardXp: 40,
+    rewardXp: 18,
     target: 3,
     unitLabel: 'предм.',
     icon: 'layers',
+    metric: 'subjectsTouched',
   },
   {
     id: 'night_owl',
@@ -420,12 +1634,55 @@ export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] = [
     description: 'Повторил карточку в позднее время (с 23:00 до 05:00).',
     category: 'special',
     rarity: 'common',
-    rewardXp: 15,
+    rewardXp: 8,
     target: 1,
-    unitLabel: 'сессия',
+    unitLabel: 'повтор.',
     icon: 'moon',
+    metric: 'nightStudyCount',
+  },
+  {
+    id: 'night_owl_10',
+    title: 'Полуночный читальный зал',
+    description: 'Выполнил 10 повторений в ночное время (23:00–05:00).',
+    category: 'special',
+    rarity: 'rare',
+    rewardXp: 18,
+    target: 10,
+    unitLabel: 'повтор.',
+    icon: 'moon',
+    metric: 'nightStudyCount',
+  },
+  {
+    id: 'night_owl_35',
+    title: 'Хранитель ночной лампы',
+    description: 'Выполнил 35 повторений в ночное время (23:00–05:00).',
+    category: 'special',
+    rarity: 'epic',
+    rewardXp: 32,
+    target: 35,
+    unitLabel: 'повтор.',
+    icon: 'moon',
+    metric: 'nightStudyCount',
+  },
+  {
+    id: 'night_owl_100',
+    title: 'Повелитель сессионных ночей',
+    description: 'Выполнил 100 повторений в ночное время (23:00–05:00).',
+    category: 'special',
+    rarity: 'legendary',
+    rewardXp: 55,
+    target: 100,
+    unitLabel: 'повтор.',
+    icon: 'moon',
+    metric: 'nightStudyCount',
   },
 ];
+
+export const ACHIEVEMENTS_CATALOG: AchievementDefinition[] =
+  ACHIEVEMENT_SPECS.map(({metric: _metric, ...def}) => def);
+
+const ACHIEVEMENT_METRIC_MAP: Record<string, AchievementMetricKey> =
+  Object.fromEntries(ACHIEVEMENT_SPECS.map((spec) => [spec.id, spec.metric]));
 
 export function sanitizeAchievementState(
   raw: Partial<AchievementSystemState> | null | undefined,
@@ -476,19 +1733,6 @@ export function loadAchievementState(): {
   }
 }
 
-export interface AchievementEvalSnapshot {
-  srMap: Record<number, CardSRState>;
-  taskMastery: Record<string, TaskMasteryStatus>;
-  activityLog: DailyActivityMap;
-  dailyGoal: number;
-  quizStats: QuizStats;
-  counters: AchievementCounters;
-}
-
-const RK_IDS = new Set(RK_QUESTIONS.map((c) => c.id));
-const EXAM_IDS = new Set(EXAM_QUESTIONS.map((c) => c.id));
-const MATAN_IDS = new Set(MATAN_QUESTIONS.map((c) => c.id));
-
 export interface AchievementProgressItem {
   definition: AchievementDefinition;
   current: number;
@@ -498,117 +1742,13 @@ export interface AchievementProgressItem {
   unlockedAt?: number;
 }
 
-export function computeAchievementMetrics(snapshot: AchievementEvalSnapshot) {
-  const {srMap, taskMastery, activityLog, dailyGoal, quizStats, counters} =
-    snapshot;
-
-  let knownCards = 0;
-  let rainbowCards = 0;
-  let reviewedCardsInSr = 0;
-  let touchedRk = false;
-  let touchedExam = false;
-  let touchedMatan = false;
-
-  for (const [idStr, sr] of Object.entries(srMap)) {
-    const id = Number(idStr);
-    if (sr.status !== 'unseen' || sr.lastGrade) {
-      reviewedCardsInSr++;
-      if (RK_IDS.has(id)) touchedRk = true;
-      if (EXAM_IDS.has(id)) touchedExam = true;
-      if (MATAN_IDS.has(id)) touchedMatan = true;
-    }
-    if (sr.status === 'known') knownCards++;
-    if (getCardMasteryPercent(sr) >= 95) rainbowCards++;
-  }
-
-  let solvedTasks = 0;
-  for (const status of Object.values(taskMastery)) {
-    if (status === 'solved') solvedTasks++;
-  }
-
-  const streaks = computeActivityStreaks(activityLog, dailyGoal);
-  const subjectsTouched =
-    (touchedRk ? 1 : 0) + (touchedExam ? 1 : 0) + (touchedMatan ? 1 : 0);
-
-  return {
-    totalReviews: Math.max(counters.totalReviews, reviewedCardsInSr),
-    bestEasyStreak: counters.bestEasyStreak,
-    easyStreak: counters.easyStreak,
-    bestGoodOrEasyStreak: counters.bestGoodOrEasyStreak,
-    goodOrEasyStreak: counters.goodOrEasyStreak,
-    dailyGoalHit: streaks.todayTotal >= Math.max(1, dailyGoal) ? 1 : 0,
-    todayTotal: streaks.todayTotal,
-    dailyGoal: Math.max(1, dailyGoal),
-    bestDayStreak: Math.max(streaks.currentStreak, streaks.bestStreak),
-    currentDayStreak: streaks.currentStreak,
-    knownCards,
-    rainbowCards,
-    solvedTasks,
-    bestQuizPct: quizStats.bestScorePct,
-    totalFocusMinutes: streaks.totalFocusMinutes,
-    subjectsTouched,
-    nightStudyCount: counters.nightStudyCount,
-    spotTheLieWins: counters.spotTheLieWins,
-  };
-}
-
 export function getAchievementCurrentValue(
   id: string,
   metrics: ReturnType<typeof computeAchievementMetrics>,
 ): number {
-  switch (id) {
-    case 'first_step':
-    case 'reviews_25':
-    case 'reviews_100':
-    case 'reviews_300':
-    case 'reviews_750':
-      return metrics.totalReviews;
-    case 'easy_streak_5':
-    case 'easy_streak_10':
-    case 'easy_streak_20':
-      return metrics.bestEasyStreak;
-    case 'flow_streak_15':
-    case 'flow_streak_20':
-    case 'flow_streak_40':
-      return metrics.bestGoodOrEasyStreak;
-    case 'daily_goal_done':
-      return metrics.dailyGoalHit;
-    case 'streak_3_days':
-    case 'streak_5_days':
-    case 'streak_7_days':
-    case 'streak_14_days':
-      return metrics.bestDayStreak;
-    case 'mastered_10':
-    case 'mastered_25':
-    case 'mastered_50':
-    case 'mastered_75':
-    case 'mastered_120':
-      return metrics.knownCards;
-    case 'rainbow_master_10':
-    case 'rainbow_master_30':
-    case 'rainbow_master_60':
-      return metrics.rainbowCards;
-    case 'tasks_5':
-    case 'tasks_10':
-    case 'tasks_25':
-    case 'tasks_45':
-      return metrics.solvedTasks;
-    case 'spot_lie_3':
-    case 'spot_lie_10':
-    case 'spot_lie_25':
-      return metrics.spotTheLieWins;
-    case 'quiz_ace':
-      return metrics.bestQuizPct;
-    case 'focus_60':
-    case 'focus_240':
-      return metrics.totalFocusMinutes;
-    case 'all_subjects':
-      return metrics.subjectsTouched;
-    case 'night_owl':
-      return metrics.nightStudyCount;
-    default:
-      return 0;
-  }
+  const metricKey = ACHIEVEMENT_METRIC_MAP[id];
+  if (!metricKey) return 0;
+  return metrics[metricKey] ?? 0;
 }
 
 export function evaluateAchievements(

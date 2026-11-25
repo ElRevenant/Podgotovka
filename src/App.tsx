@@ -37,9 +37,11 @@ import {BlitzQuiz} from './components/BlitzQuiz';
 import {CompletenessAudit} from './components/CompletenessAudit';
 import {CramModeModal} from './components/CramModeModal';
 import {CustomCardModal} from './components/CustomCardModal';
+import {DailyGoalRing} from './components/DailyGoalRing';
 import {ExamSimulator} from './components/ExamSimulator';
 import {FeynmanFreshmanModal} from './components/FeynmanFreshmanModal';
 import {DeckStatusFilter, FlashcardStage} from './components/FlashcardStage';
+import {FocusSoundscape} from './components/FocusSoundscape';
 import {FormulaCheatSheetModal} from './components/FormulaCheatSheetModal';
 import {GuideWorkspace} from './components/GuideWorkspace';
 import {KnowledgeGraphModal} from './components/KnowledgeGraphModal';
@@ -48,7 +50,7 @@ import {OfflineIndicator} from './components/OfflineIndicator';
 import {OralExamDialogModal} from './components/OralExamDialogModal';
 import {PdfSubjectImporterModal} from './components/PdfSubjectImporterModal';
 import {PomodoroTimer} from './components/PomodoroTimer';
-import {RewardsModal} from './components/RewardsModal';
+import {RewardsModal, SESSION_ACHIEVEMENTS_TOTAL} from './components/RewardsModal';
 import {SettingsModal} from './components/SettingsModal';
 import {SpotTheLieModal} from './components/SpotTheLieModal';
 import {TasksWorkspace} from './components/TasksWorkspace';
@@ -139,6 +141,9 @@ export default function App() {
     useState<DailyActivityMap>(loadActivityLog);
   const [plannerSettings, setPlannerSettings] =
     useState<StudyPlannerSettings>(loadPlannerSettings);
+  const [dailyGoalDraft, setDailyGoalDraft] = useState<string>(() =>
+    String(loadPlannerSettings().dailyGoal),
+  );
   const [preferences, setPreferences] =
     useState<AppPreferences>(loadAppPreferences);
 
@@ -188,6 +193,7 @@ export default function App() {
   const [rewardState, setRewardState] =
     useState<RewardSystemState>(loadRewardState);
   const lastCardXpTimeRef = useRef<Record<number, number>>({});
+  const focusMinuteCounterRef = useRef<number>(0);
   const initialAchievementsRef = useRef<ReturnType<typeof loadAchievementState> | null>(
     null,
   );
@@ -295,7 +301,7 @@ export default function App() {
 
   const activeSubjectDisplayTitle = useMemo(() => {
     if (activeCustomSubject) return activeCustomSubject.name;
-    if (studyCategory === 'rk') return 'Ангем · РК 2';
+    if (studyCategory === 'rk') return 'Ангем · РК 1, РК 2 и Экзамен';
     if (studyCategory === 'matan') return 'Матан · Экзамен';
     return 'АИП · Экзамен';
   }, [studyCategory, activeCustomSubject]);
@@ -627,10 +633,10 @@ export default function App() {
   const handleBuyStreakFreeze = () => {
     setRewardState((prev) => {
       const currentFreezes = prev.streakFreezes ?? 0;
-      if (currentFreezes >= 3 || prev.balanceXp < 150) return prev;
+      if (currentFreezes >= 3 || prev.balanceXp < 250) return prev;
       return {
         ...prev,
-        balanceXp: prev.balanceXp - 150,
+        balanceXp: prev.balanceXp - 250,
         streakFreezes: currentFreezes + 1,
       };
     });
@@ -753,21 +759,23 @@ export default function App() {
     });
     bumpTodayActivity({reviews: 1});
 
-    // Harder XP economy: 180-second (3 min) anti-farming cooldown per card
+    // Hardcore XP economy: 300-second (5 min) anti-farming cooldown per card
     const lastXpAt = lastCardXpTimeRef.current[questionId] ?? 0;
-    if (nowMs - lastXpAt >= 180 * 1000) {
+    if (nowMs - lastXpAt >= 300 * 1000) {
       lastCardXpTimeRef.current[questionId] = nowMs;
       const xpToGrant =
         grade === 'good' || grade === 'easy'
           ? wasWeakOrHard
-            ? 8
+            ? 5
             : grade === 'easy'
-              ? 5
-              : 4
+              ? 3
+              : 2
           : grade === 'hard'
-            ? 2
-            : 1;
-      grantStudyXp(xpToGrant);
+            ? 1
+            : 0;
+      if (xpToGrant > 0) {
+        grantStudyXp(xpToGrant);
+      }
     }
   };
 
@@ -776,7 +784,7 @@ export default function App() {
       const previous = prev[taskId] ?? 'unsolved';
       if (status === 'solved' && previous !== 'solved') {
         bumpTodayActivity({tasksSolved: 1});
-        grantStudyXp(12);
+        grantStudyXp(8);
       }
       return {...prev, [taskId]: status};
     });
@@ -796,11 +804,27 @@ export default function App() {
 
   const handleFocusMinuteCompleted = useCallback(() => {
     bumpTodayActivity({focusMinutes: 1});
-    grantStudyXp(1);
+    focusMinuteCounterRef.current += 1;
+    if (focusMinuteCounterRef.current % 2 === 0) {
+      grantStudyXp(1);
+    }
   }, [bumpTodayActivity, grantStudyXp]);
 
   const handleUpdatePlanner = (patch: Partial<StudyPlannerSettings>) => {
     setPlannerSettings((prev) => ({...prev, ...patch}));
+  };
+
+  useEffect(() => {
+    setDailyGoalDraft(String(plannerSettings.dailyGoal));
+  }, [plannerSettings.dailyGoal]);
+
+  const commitDailyGoal = (raw: string) => {
+    const parsed = Number(raw);
+    const clamped = Number.isFinite(parsed)
+      ? Math.max(5, Math.min(100, Math.round(parsed)))
+      : plannerSettings.dailyGoal;
+    handleUpdatePlanner({dailyGoal: clamped});
+    setDailyGoalDraft(String(clamped));
   };
 
   const handleUpdateExamDate = (category: StudyCategory, dateIso: string) => {
@@ -922,8 +946,8 @@ export default function App() {
       bestScorePct: Math.max(prev.bestScorePct, pct),
       lastPlayedAt: Date.now(),
     }));
-    if (pct >= 60) {
-      const earnedQuizXp = Math.max(2, Math.round((pct / 100) * 10));
+    if (pct >= 70) {
+      const earnedQuizXp = Math.max(1, Math.round((pct / 100) * 7));
       grantStudyXp(earnedQuizXp);
     }
   };
@@ -1323,7 +1347,7 @@ export default function App() {
       id: 'lectures',
       label:
         studyCategory === 'rk'
-          ? 'PDF РК 2'
+          ? 'PDF Ангема'
           : studyCategory === 'matan'
             ? 'PDF Матан'
             : activeCustomSubject
@@ -1367,7 +1391,7 @@ export default function App() {
                     : 'text-slate-600 hover:text-slate-950 dark:text-[#9CA3AF] dark:hover:text-[#F8FAFC]'
                 }`}
               >
-                РК (Ангем)
+                Ангем (РК + Экз)
               </button>
               <button
                 type="button"
@@ -1479,12 +1503,13 @@ export default function App() {
                 setRewardsOpen(true);
               }}
               aria-label="Открыть зал достижений зимней сессии"
-              title="Зал достижений зимней сессии (52 ачивки + награды XP)"
+              title={`Зал достижений зимней сессии (${SESSION_ACHIEVEMENTS_TOTAL} ачивок + награды XP)`}
               className="prism-tool-btn inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-full text-slate-700 dark:text-[#E5E7EB] whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Trophy className="h-3.5 w-3.5 text-amber-500 dark:text-amber-300 shrink-0" />
               <span className="font-mono tabular-nums text-[11px]">
-                {(rewardState.claimedAchievementIds ?? []).length}/52
+                {(rewardState.claimedAchievementIds ?? []).length}/
+                {SESSION_ACHIEVEMENTS_TOTAL}
               </span>
             </button>
 
@@ -1601,125 +1626,170 @@ export default function App() {
             className="hidden"
           />
 
-          {/* Row 1: Grouped Readiness Metrics + Inline Focus Timer Capsule */}
+          {/* Row 1: Daily Goal Ring + Readiness Metrics + Focus Soundscape & Pomodoro */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex-1 min-w-0 space-y-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-xs">
-                {/* Group A: Subject Readiness & Core Mastery */}
-                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 tabular-nums">
-                  <span className="font-semibold text-slate-900 dark:text-[#F8FAFC]">
-                    {activeCustomSubject
-                      ? `Готовность (${activeCustomSubject.shortName}):`
-                      : studyCategory === 'rk'
-                        ? 'Готовность к РК 2:'
-                        : studyCategory === 'matan'
-                          ? 'Готовность к Матану:'
-                          : 'Готовность к АИП:'}{' '}
-                    <strong className="font-mono text-cyan-700 dark:text-cyan-300">
-                      {dashboardStats.readinessPct}%
-                    </strong>
+            <div className="flex items-center gap-3 sm:gap-3.5 flex-1 min-w-0">
+              <div className="flex items-center gap-2 shrink-0">
+                <DailyGoalRing
+                  todayTotal={todayTotal}
+                  dailyGoal={plannerSettings.dailyGoal}
+                  onClick={() => setAllStatsOpen(true)}
+                />
+                <label
+                  className="inline-flex flex-col items-start gap-0.5 shrink-0"
+                  title="Изменить дневную цель повторений (от 5 до 100 в день)"
+                >
+                  <span className="text-[10px] font-medium text-slate-500 dark:text-[#9CA3AF] leading-none">
+                    Цель/день
                   </span>
-                  <span aria-hidden="true" className="text-slate-300 dark:text-white/15">·</span>
-                  <span className="text-slate-600 dark:text-[#9CA3AF]">
-                    Теория{' '}
-                    <strong className="font-mono text-emerald-700 dark:text-emerald-400">
-                      {dashboardStats.known}/{dashboardStats.total}
-                    </strong>
-                  </span>
-                  {dashboardStats.tasksTotal > 0 && (
-                    <>
-                      <span aria-hidden="true" className="text-slate-300 dark:text-white/15">·</span>
-                      <span className="text-slate-600 dark:text-[#9CA3AF]">
-                        Задачи{' '}
-                        <strong className="font-mono text-emerald-700 dark:text-emerald-400">
-                          {dashboardStats.tasksSolved}/{dashboardStats.tasksTotal}
-                        </strong>
-                      </span>
-                    </>
-                  )}
-                </div>
-
-                {/* Group B: Daily Rhythm, Streak, XP & Exam Countdown */}
-                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-slate-600 dark:text-[#9CA3AF] tabular-nums">
-                  <span>
-                    Цель дня{' '}
-                    <strong className="font-mono text-cyan-700 dark:text-cyan-300">
-                      {todayTotal}/{plannerSettings.dailyGoal}
-                    </strong>
-                  </span>
-                  <span aria-hidden="true" className="text-slate-300 dark:text-white/15">·</span>
-                  <span className="inline-flex items-center gap-1">
-                    <Flame className="h-3.5 w-3.5 text-amber-500" />
-                    <strong className="font-mono text-slate-900 dark:text-[#F8FAFC]">
-                      {currentStreak} дн.
-                    </strong>
-                    {(rewardState.streakFreezes ?? 0) > 0 && (
-                      <span
-                        title={`Заморозка стрика активна: в запасе ${rewardState.streakFreezes} из 3`}
-                        className="ml-0.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-cyan-500/15 border border-cyan-400/35 text-cyan-700 dark:text-cyan-300"
-                      >
-                        ❄️×{rewardState.streakFreezes}
-                      </span>
-                    )}
-                  </span>
-                  <span aria-hidden="true" className="text-slate-300 dark:text-white/15">·</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRewardsInitialTab('shop');
-                      setRewardsOpen(true);
+                  <input
+                    type="number"
+                    min={5}
+                    max={100}
+                    step={1}
+                    inputMode="numeric"
+                    aria-label="Дневная цель повторений"
+                    value={dailyGoalDraft}
+                    onChange={(e) => {
+                      const nextVal = e.target.value;
+                      setDailyGoalDraft(nextVal);
+                      const parsed = Number(nextVal);
+                      if (
+                        Number.isFinite(parsed) &&
+                        parsed >= 5 &&
+                        parsed <= 100
+                      ) {
+                        handleUpdatePlanner({dailyGoal: Math.round(parsed)});
+                      }
                     }}
-                    className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 hover:text-amber-600 dark:hover:text-amber-200 transition-colors cursor-pointer"
-                    title="Открыть допуски и награды за XP"
-                  >
-                    <Sparkles className="h-3 w-3 shrink-0" />
-                    <strong className="font-mono">
-                      {rewardState.balanceXp}
-                      {nextLockedReward ? `/${nextLockedReward.costXp}` : ''} XP
-                    </strong>
-                  </button>
-                  <span aria-hidden="true" className="hidden sm:inline text-slate-300 dark:text-white/15">·</span>
-                  <span className="hidden sm:inline-flex items-center gap-1 text-slate-500 dark:text-[#9CA3AF]">
-                    <Calendar className="h-3 w-3 text-slate-400 dark:text-[#64748B]" />
-                    <span>
-                      {quickPlanSummary.isPastDue
-                        ? 'Срок прошёл'
-                        : `До сдачи: ${quickPlanSummary.daysLeft} дн.`}
-                    </span>
-                  </span>
-                </div>
+                    onBlur={() => commitDailyGoal(dailyGoalDraft)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        commitDailyGoal(dailyGoalDraft);
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    className="prism-input w-14 h-7 px-2 text-xs font-mono font-semibold text-center tabular-nums rounded-lg text-slate-900 dark:text-[#F8FAFC]"
+                  />
+                </label>
               </div>
 
-              {/* Signature Lime -> Emerald -> Cyan Progress Bar */}
-              <div className="w-full h-1.5 rounded-full bg-slate-200/80 dark:bg-white/[0.06] overflow-hidden flex">
-                <div
-                  className="h-full prism-progress-fill transition-all duration-300"
-                  style={{width: `${dashboardStats.knownPct}%`}}
-                  title={`Выучено: ${dashboardStats.known}`}
-                />
-                <div
-                  className="h-full bg-cyan-400/45 dark:bg-cyan-400/30 transition-all duration-300"
-                  style={{width: `${dashboardStats.progressBarInProgressPct}%`}}
-                  title={`В процессе повторения: ${dashboardStats.inProgress + dashboardStats.hard}`}
-                />
+              <div className="hidden sm:block h-10 w-px bg-slate-200/80 dark:bg-white/[0.08] shrink-0" />
+
+              <div className="flex-1 min-w-0 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-xs">
+                  {/* Group A: Subject Readiness & Core Mastery */}
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 tabular-nums">
+                    <span className="font-semibold text-slate-900 dark:text-[#F8FAFC]">
+                      {activeCustomSubject
+                        ? `Готовность (${activeCustomSubject.shortName}):`
+                        : studyCategory === 'rk'
+                          ? 'Готовность к Ангему:'
+                          : studyCategory === 'matan'
+                            ? 'Готовность к Матану:'
+                            : 'Готовность к АИП:'}{' '}
+                      <strong className="font-mono text-cyan-700 dark:text-cyan-300">
+                        {dashboardStats.readinessPct}%
+                      </strong>
+                    </span>
+                    <span aria-hidden="true" className="text-slate-300 dark:text-white/15">·</span>
+                    <span className="text-slate-600 dark:text-[#9CA3AF]">
+                      Теория{' '}
+                      <strong className="font-mono text-emerald-700 dark:text-emerald-400">
+                        {dashboardStats.known}/{dashboardStats.total}
+                      </strong>
+                    </span>
+                    {dashboardStats.tasksTotal > 0 && (
+                      <>
+                        <span aria-hidden="true" className="text-slate-300 dark:text-white/15">·</span>
+                        <span className="text-slate-600 dark:text-[#9CA3AF]">
+                          Задачи{' '}
+                          <strong className="font-mono text-emerald-700 dark:text-emerald-400">
+                            {dashboardStats.tasksSolved}/{dashboardStats.tasksTotal}
+                          </strong>
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Group B: Streak, XP & Exam Countdown */}
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-slate-600 dark:text-[#9CA3AF] tabular-nums">
+                    <span className="inline-flex items-center gap-1">
+                      <Flame className="h-3.5 w-3.5 text-amber-500" />
+                      <strong className="font-mono text-slate-900 dark:text-[#F8FAFC]">
+                        {currentStreak} дн.
+                      </strong>
+                      {(rewardState.streakFreezes ?? 0) > 0 && (
+                        <span
+                          title={`Заморозка стрика активна: в запасе ${rewardState.streakFreezes} из 3`}
+                          className="ml-0.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-cyan-500/15 border border-cyan-400/35 text-cyan-700 dark:text-cyan-300"
+                        >
+                          ❄️×{rewardState.streakFreezes}
+                        </span>
+                      )}
+                    </span>
+                    <span aria-hidden="true" className="text-slate-300 dark:text-white/15">·</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRewardsInitialTab('shop');
+                        setRewardsOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 hover:text-amber-600 dark:hover:text-amber-200 transition-colors cursor-pointer"
+                      title="Открыть допуски и награды за XP"
+                    >
+                      <Sparkles className="h-3 w-3 shrink-0" />
+                      <strong className="font-mono">
+                        {rewardState.balanceXp}
+                        {nextLockedReward ? `/${nextLockedReward.costXp}` : ''} XP
+                      </strong>
+                    </button>
+                    <span aria-hidden="true" className="hidden sm:inline text-slate-300 dark:text-white/15">·</span>
+                    <span className="hidden sm:inline-flex items-center gap-1 text-slate-500 dark:text-[#9CA3AF]">
+                      <Calendar className="h-3 w-3 text-slate-400 dark:text-[#64748B]" />
+                      <span>
+                        {quickPlanSummary.isPastDue
+                          ? 'Срок прошёл'
+                          : `До сдачи: ${quickPlanSummary.daysLeft} дн.`}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Signature Lime -> Emerald -> Cyan Progress Bar */}
+                <div className="w-full h-1.5 rounded-full bg-slate-200/80 dark:bg-white/[0.06] overflow-hidden flex">
+                  <div
+                    className="h-full prism-progress-fill transition-all duration-300"
+                    style={{width: `${dashboardStats.knownPct}%`}}
+                    title={`Выучено: ${dashboardStats.known}`}
+                  />
+                  <div
+                    className="h-full bg-cyan-400/45 dark:bg-cyan-400/30 transition-all duration-300"
+                    style={{width: `${dashboardStats.progressBarInProgressPct}%`}}
+                    title={`В процессе повторения: ${dashboardStats.inProgress + dashboardStats.hard}`}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Compact Inline Focus Timer Capsule */}
-            <PomodoroTimer
-              focusMinutes={preferences.focusMinutes}
-              breakMinutes={preferences.breakMinutes}
-              onChangeDurations={(focusMinutes, breakMinutes) => {
-                handleUpdatePreferences({focusMinutes, breakMinutes});
-                handleUpdatePlanner({
-                  pomodoroMode: focusMinutes >= 50 ? '50/10' : '25/5',
-                });
-              }}
-              onFocusMinuteCompleted={handleFocusMinuteCompleted}
-              sessionReviewsCount={sessionStats.totalReviewed}
-              remainingCardsToMaster={dashboardStats.total - dashboardStats.known}
-              totalFocusMinutesToday={todayFocusMinutes}
-            />
+            {/* Focus Controls Cluster: Soundscape + Pomodoro Timer */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <FocusSoundscape />
+              <PomodoroTimer
+                focusMinutes={preferences.focusMinutes}
+                breakMinutes={preferences.breakMinutes}
+                onChangeDurations={(focusMinutes, breakMinutes) => {
+                  handleUpdatePreferences({focusMinutes, breakMinutes});
+                  handleUpdatePlanner({
+                    pomodoroMode: focusMinutes >= 50 ? '50/10' : '25/5',
+                  });
+                }}
+                onFocusMinuteCompleted={handleFocusMinuteCompleted}
+                sessionReviewsCount={sessionStats.totalReviewed}
+                remainingCardsToMaster={dashboardStats.total - dashboardStats.known}
+                totalFocusMinutesToday={todayFocusMinutes}
+              />
+            </div>
           </div>
 
           {/* Row 2: Non-Clipped Flex-Wrap Simulator Strip + Compact 'Ещё' Dropdown on Right */}
@@ -1974,7 +2044,7 @@ export default function App() {
               {activeCustomSubject
                 ? `Импортированный предмет из PDF: ${activeCustomSubject.fileName}`
                 : studyCategory === 'rk'
-                  ? 'Аналитическая геометрия · 1-й семестр · ИУ (кроме ИУ9), РЛ, ПС, РТ (2026-27 уч.г.) · Рубежный контроль 2'
+                  ? 'Аналитическая геометрия · 1-й семестр · ИУ6 · РК 1 (модуль 1), РК 2 и Экзамен (лекции 1–5, 8–9)'
                   : studyCategory === 'matan'
                     ? 'Математический анализ · 1-й семестр · ИУ, РЛ, ПС, РТ · G22 · Экзамен (теория + 5 комплектов задач)'
                     : 'Алгоритмизация и программирование · 1 семестр · МГТУ им. Н.Э. Баумана, ИУ6'}
@@ -1984,7 +2054,7 @@ export default function App() {
                 (activeCustomSubject
                   ? `${activeCustomSubject.name} · Карточки (${activeCategoryCards.length})`
                   : studyCategory === 'rk'
-                    ? `Теория РК 2 · Карточки для заучивания (${activeCategoryCards.length})`
+                    ? `Теория Ангем (РК 1, РК 2 и Экзамен) · Карточки (${activeCategoryCards.length})`
                     : studyCategory === 'matan'
                       ? `Теория Матан · Билеты, определения и методички Ч.1–3 (${activeCategoryCards.length})`
                       : `Карточки интервального повторения (${activeCategoryCards.length})`)}
@@ -1992,7 +2062,7 @@ export default function App() {
                 (activeCustomSubject
                   ? `Генератор билета · ${activeCustomSubject.name}`
                   : studyCategory === 'rk'
-                    ? 'Генератор реального билета РК 2 (таймер и зачётный порог)'
+                    ? 'Генератор билета Ангем (РК и Экзамен · таймер и порог)'
                     : studyCategory === 'matan'
                       ? 'Генератор экзаменационного билета Матан G22 (40 баллов)'
                       : 'Генератор реального экзаменационного билета АИП')}
@@ -2000,7 +2070,7 @@ export default function App() {
                 (activeCustomSubject
                   ? `Блиц-тест и конструктор шагов · ${activeCustomSubject.name}`
                   : studyCategory === 'rk'
-                    ? 'Блиц-тест, формулы за 10 сек, конструктор шагов и устная защита РК 2'
+                    ? 'Блиц-тест, формулы за 10 сек, конструктор шагов и устная защита Ангем'
                     : studyCategory === 'matan'
                       ? 'Блиц-тест, формулы за 10 сек, конструктор доказательств и устная защита Матан'
                       : 'Блиц-тест, термины за 10 сек, конструктор шагов и устная самопроверка АИП')}
@@ -2008,26 +2078,26 @@ export default function App() {
                 (activeCustomSubject
                   ? `Практика · ${activeCustomSubject.name}`
                   : studyCategory === 'rk'
-                    ? 'Практика РК 2 · 17 задач + бесконечный генератор и проверка по фото'
+                    ? 'Практика Ангем · 17 задач РК 2 + бесконечный генератор и проверка по фото'
                     : studyCategory === 'matan'
                       ? `Практика Матан · ${activeCategoryTasks.length} задач (G22 + методички Ч.1–3) + графики и автопроверка`
-                      : 'Задачи к экзамену и примеры из лекций')}
+                      : `Задачи к экзамену, РК и учебнику C++ (${activeCategoryTasks.length})`)}
               {section === 'audit' &&
                 (activeCustomSubject
                   ? `Аудит полноты · ${activeCustomSubject.name}`
                   : studyCategory === 'rk'
-                    ? 'Аудит полноты РК 2: 32 вопроса теории + 17 задач практики'
+                    ? `Аудит полноты Ангем: ${activeCategoryCards.length} вопросов теории (РК 1, РК 2, лекции) + ${activeCategoryTasks.length} задач`
                     : studyCategory === 'matan'
                       ? `Аудит полноты Матан: 49 теорем + 48 определений + 18 метод. + ${activeCategoryTasks.length} задач`
-                      : 'Аудит полноты: 50 билетов + 12 доп. тем лекций + 2 задачи')}
+                      : `Аудит полноты АИП: 50 билетов + 12 доп. тем + 28 вопросов учебника C++ + ${activeCategoryTasks.length} задач`)}
               {section === 'lectures' &&
                 (activeCustomSubject
                   ? `Источник PDF · ${activeCustomSubject.fileName}`
                   : studyCategory === 'rk'
-                    ? 'Исходный документ «Ангем РК 2» (стр. 1–4)'
+                    ? 'Исходные PDF по Ангему: РК 1, РК 2 и лекции 1–5, 8–9 (7 док. · 67 стр.)'
                     : studyCategory === 'matan'
                       ? 'Исходные PDF Матана: теория (62 с.), задачи G22 (32 с.) и методички МГТУ Ч.1–3 (96 с.)'
-                      : 'Конспекты и слайды лекций (1.1–1.8)')}
+                      : 'Конспекты лекций (1.1–1.8) и Учебник C++ (51 с.)')}
               {section === 'guide' &&
                 'Гайд и обучение · Как готовиться к зимней сессии на максимум'}
             </h1>
@@ -2037,10 +2107,10 @@ export default function App() {
             {activeCustomSubject
               ? `Свой PDF · ${activeCategoryCards.length} карточек SM-2`
               : studyCategory === 'rk'
-                ? 'Теория: 32 карточки (24 баз. + 8 док-в) · Практика: 17 задач'
+                ? `Теория: ${activeCategoryCards.length} карт. (РК 2 + РК 1 + лекции) · Практика: ${activeCategoryTasks.length} задач`
                 : studyCategory === 'matan'
                   ? `Теория: ${activeCategoryCards.length} карт. (49+48+18 метод.) · Практика: ${activeCategoryTasks.length} задач`
-                  : 'SM-2 / Лейтнер · 1–50 билеты + 51–62 доп. разделы лекций'}
+                  : `SM-2 / Лейтнер · 1–50 билеты + 51–62 доп. + 63–90 учебник C++`}
           </p>
         </div>
 
@@ -2147,10 +2217,10 @@ export default function App() {
             {activeCustomSubject
               ? `Свой предмет «${activeCustomSubject.name}» (${activeCategoryCards.length} карточек, сохранено локально в браузере)`
               : studyCategory === 'rk'
-                ? 'Полная база РК 2 по Аналитической геометрии: 24 базовых вопроса, 8 теорем с доказательствами и 17 решённых задач со слайдами'
+                ? `Полная база по Аналитической геометрии: РК 1 (40 вопросов), РК 2 (32 вопроса + 17 задач) и лекции 1–5, 8–9 (${activeCategoryCards.length} карточек и 7 PDF-документов)`
                 : studyCategory === 'matan'
                   ? `Полная база Экзамена по Матану (1 семестр, G22 + Методички МГТУ Ч.1–3): 49 вопросов с доказательствами, 48 базовых определений, 18 методических карточек и ${activeCategoryTasks.length} решённых задач`
-                  : 'Полная база по перечню экзаменационных вопросов и всем слайдам лекций 1.1–1.8'}
+                  : `Полная база АИП: 50 билетов, 12 доп. тем лекций 1.1–1.8, 28 контрольных вопросов и ${activeCategoryTasks.length} задач C++ из учебника`}
           </span>
 
           {!confirmReset ? (
@@ -2250,7 +2320,7 @@ export default function App() {
                 spotTheLieWins: prev.counters.spotTheLieWins + 1,
               },
             }));
-            grantStudyXp(5);
+            grantStudyXp(3);
           }}
           onClose={() => setSpotTheLieOpen(false)}
         />

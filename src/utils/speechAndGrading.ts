@@ -596,34 +596,539 @@ export interface AnswerEvaluationResult {
   evaluatedBy?: 'professor-ai' | 'local-fallback';
 }
 
-/* Synonym dictionary so even local fallback understands human phrasing across АИП, Матан, and Ангем РК 2 */
+/* Rich synonym groups so local evaluation understands natural human phrasing across Матан, Ангем, and АИП C++ */
 const SYNONYM_GROUPS: string[][] = [
-  ['массив', 'массива', 'индекс', 'элементы подряд', 'непрерывная область'],
-  ['указатель', 'адрес', 'разыменование', 'звездочка', 'pointer', 'амперсанд'],
-  ['ссылка', 'псевдоним', 'второе имя', 'алиас', 'reference'],
-  ['стек', 'lifo', 'последним пришел', 'вершина стека', 'push', 'pop'],
-  ['очередь', 'fifo', 'первым пришел', 'начало и конец', 'голова и хвост'],
+  // Number sets & real analysis foundations
+  [
+    'вещественн',
+    'действительн',
+    'не мним',
+    'немним',
+    'без мним',
+    'не комплексн',
+    'числовая прям',
+    'числовая ос',
+    'числовой прям',
+    'числовой ос',
+    'рациональн и иррациональн',
+    'иррациональн',
+    'бесконечные десятичн',
+    'множество r',
+  ],
+  [
+    'натуральн',
+    'для счета',
+    'целые положительн',
+    'больше нуля цел',
+    'счетные числа',
+    '1 2 3',
+  ],
+  [
+    'целые числ',
+    'без дробн',
+    'отрицательные ноль и положительные',
+    'натуральные ноль и противоположные',
+  ],
+  [
+    'рациональн',
+    'отношение целых',
+    'дробь p/q',
+    'в виде дроби',
+    'm/n',
+    'конечная или периодическая',
+  ],
+  [
+    'комплексн',
+    'мнимая единиц',
+    'a+bi',
+    'мнимая част',
+    'действительная и мнимая',
+  ],
+  [
+    'окрестност',
+    'интервал вокруг',
+    'открытый интервал',
+    'x0 - delta',
+    'дельта окрестность',
+    'проколотая',
+    'без самой точки',
+  ],
+  [
+    'супремум',
+    'верхняя гран',
+    'наименьшая из верхних',
+    'точная верхняя',
+    'sup',
+  ],
+  [
+    'инфимум',
+    'нижняя гран',
+    'наибольшая из нижних',
+    'точная нижняя',
+    'inf',
+  ],
+  [
+    'ограничен',
+    'не превосход',
+    'существует константа',
+    'модуль меньше',
+    'лежит в отрезке',
+  ],
+  [
+    'бесконечно мал',
+    'бмф',
+    'б.м.ф',
+    'стремится к нулю',
+    'предел равен нулю',
+    'предел 0',
+    'стремится к 0',
+  ],
+  [
+    'бесконечно больш',
+    'ббф',
+    'б.б.ф',
+    'стремится к бесконечности',
+    'предел бесконечность',
+    'неограниченно растет',
+  ],
+  [
+    'эквивалентн',
+    'отношение стремится к единице',
+    'предел отношения равен 1',
+    'предел отношения 1',
+  ],
+  [
+    'предел',
+    'стремится',
+    'окрестность',
+    'эпсилон',
+    'дельта',
+    'сходится',
+    'найдется номер',
+    'для любого эпсилон',
+  ],
+  [
+    'непрерывн',
+    'без разрыв',
+    'предел равен значению',
+    'предел слева равен пределу справа',
+    'разрыв',
+    'скачок',
+    'устранимый',
+  ],
+  [
+    'производн',
+    'приращение',
+    'касательн',
+    'дифференциал',
+    'скорость изменения',
+    'предел отношения приращений',
+    'тангенс угла наклона',
+  ],
+  [
+    'экстремум',
+    'максимум',
+    'минимум',
+    'производная меняет знак',
+    'стационарн',
+    'критическая точк',
+  ],
+  [
+    'выпукл',
+    'вогнут',
+    'перегиб',
+    'вторая производн',
+    'касательная лежит',
+  ],
+  [
+    'асимптот',
+    'расстояние стремится к нулю',
+    'вертикальн',
+    'наклонн',
+    'горизонтальн',
+  ],
+  [
+    'тейлор',
+    'маклорен',
+    'пеано',
+    'остаточный член',
+    'многочлен',
+    'разложение',
+  ],
+  [
+    'лопиталь',
+    'неопределенност',
+    'отношение производных',
+    'ноль на ноль',
+    'бесконечность на бесконечность',
+  ],
+  [
+    'ролл',
+    'лагранж',
+    'коши',
+    'ферма',
+    'теорема о среднем',
+    'найдется точка c',
+  ],
+  // Analytic geometry & linear algebra
+  [
+    'коллинеарн',
+    'параллельн',
+    'на одной прямой',
+    'параллельны одной прямой',
+    'пропорциональн',
+    'векторное равно нулю',
+  ],
+  [
+    'компланарн',
+    'в одной плоскости',
+    'параллельны одной плоскости',
+    'смешанное равно нулю',
+  ],
+  [
+    'ортогональн',
+    'перпендикулярн',
+    'угол 90',
+    'прямой угол',
+    'скалярное равно нулю',
+    'скалярное произведение 0',
+  ],
+  [
+    'скалярное произведен',
+    'произведение длин на косинус',
+    'сумма произведений координат',
+    'результат число',
+  ],
+  [
+    'векторное произведен',
+    'перпендикулярен обоим',
+    'площадь параллелограмма',
+    'правая тройка',
+    'длина на синус',
+  ],
+  [
+    'смешанное произведен',
+    'объем параллелепипеда',
+    'определитель из координат',
+  ],
+  [
+    'базис',
+    'линейно независим',
+    'любой вектор разлагается',
+    'единственным образом',
+    'разложение по базису',
+  ],
+  [
+    'матриц',
+    'строка',
+    'столбец',
+    'транспонирован',
+    'обратная',
+    'единичная',
+    'прямоугольная таблица',
+  ],
+  [
+    'невырожденн',
+    'определитель не равен нулю',
+    'детерминант не ноль',
+    'det != 0',
+    'обратимая',
+  ],
+  [
+    'вырожденн',
+    'определитель равен нулю',
+    'детерминант 0',
+    'det = 0',
+    'обратной не существует',
+  ],
+  [
+    'определитель',
+    'детерминант',
+    'минор',
+    'алгебраическое дополнение',
+    'ранг',
+    'базисный минор',
+  ],
+  [
+    'слау',
+    'система уравнений',
+    'гаусс',
+    'кронекер',
+    'капелли',
+    'фср',
+    'совместна',
+    'ранг основной равен расширенной',
+  ],
+  [
+    'квадрик',
+    'кривая второго порядка',
+    'эллипс',
+    'гипербола',
+    'парабола',
+    'инвариант',
+    'поворот осей',
+    'канонический вид',
+  ],
+  [
+    'поверхност',
+    'метод сечений',
+    'цилиндр',
+    'конус',
+    'поверхность вращения',
+    'эллипсоид',
+    'параболоид',
+    'гиперболоид',
+  ],
+  // C++ / АИП
+  ['массив', 'индекс', 'элементы подряд', 'непрерывная область', 'однотипн'],
+  ['указатель', 'хранит адрес', 'адрес', 'разыменование', 'звездочка', 'pointer', 'амперсанд', 'void*'],
+  ['ссылка', 'псевдоним', 'второе имя', 'алиас', 'alias', 'reference', 'нельзя перенаправить'],
+  ['стек', 'lifo', 'последний пришел первый ушел', 'последним пришел', 'вершина стека', 'push', 'pop'],
+  ['очередь', 'fifo', 'первый пришел первый ушел', 'первым пришел', 'начало и конец', 'голова и хвост'],
+  ['дек', 'с обоих концов', 'в начало и конец'],
   ['цикл', 'повторение', 'итерация', 'условие выхода', 'тело цикла'],
   ['предусловие', 'сначала проверяется', 'while', 'до выполнения'],
   ['постусловие', 'сначала выполняется', 'do while', 'хотя бы один раз'],
-  ['рекурсия', 'вызов самой себя', 'базовый случай', 'условие остановки'],
+  ['рекурсия', 'вызов самой себя', 'базовый случай', 'базис рекурсии', 'условие остановки'],
   ['структура', 'struct', 'разнотипные поля', 'объединение данных'],
-  ['динамическая память', 'куча', 'heap', 'new', 'delete', 'выделение памяти'],
-  ['файл', 'поток', 'fstream', 'ifstream', 'ofstream', 'чтение и запись'],
-  ['дерево', 'корень', 'узел', 'потомок', 'лист', 'левое и правое'],
-  ['функция', 'подпрограмма', 'параметры', 'возвращаемое значение', 'прототип'],
-  ['предел', 'стремится', 'окрестность', 'эпсилон', 'дельта', 'сходится'],
-  ['производная', 'приращение', 'касательная', 'дифференциал', 'скорость изменения'],
-  ['непрерывность', 'непрерывна', 'разрыв', 'скачок', 'устранимый', 'предел слева', 'предел справа'],
-  ['тейлор', 'маклорен', 'пеано', 'остаточный член', 'многочлен', 'разложение'],
-  ['лопиталь', 'неопределенность', 'отношение производных', 'ноль на ноль', 'бесконечность'],
-  ['матрица', 'строка', 'столбец', 'транспонирование', 'обратная', 'вырожденная'],
-  ['определитель', 'детерминант', 'минор', 'алгебраическое дополнение', 'ранг'],
-  ['слау', 'система уравнений', 'гаусс', 'кронекер', 'капелли', 'фср', 'совместна'],
+  ['объединение', 'union', 'общая область памяти', 'одно поле'],
+  ['динамическая память', 'куча', 'heap', 'new', 'delete', 'malloc', 'free', 'утечка'],
+  ['файл', 'поток', 'fstream', 'ifstream', 'ofstream', 'fopen', 'fclose', 'fseek', 'ftell', 'file*'],
+  ['дерево', 'корень', 'узел', 'потомок', 'лист', 'левое и правое', 'поддерево', 'обход'],
+  ['функция', 'подпрограмма', 'процедура', 'void', 'параметры', 'возвращаемое значение', 'прототип', 'inline'],
+  ['синтаксис', 'правила записи', 'форма конструкций', 'рбнф', 'бнф'],
+  ['семантика', 'смысл конструкций', 'содержание'],
+  ['пространство имен', 'namespace', 'конфликт имен', 'std', 'глобальное'],
 ];
 
+interface SemanticEquivalenceRule {
+  /** Substrings (normalized) that identify this card's topic in question/thesis */
+  cardSignals: string[];
+  /** Intuitive / mathematically equivalent phrases a student may write */
+  studentPatterns: RegExp[];
+  /** Minimum fair score granted when the student's answer hits this conceptual equivalence */
+  minScore: number;
+  /** Short readable matched concept label */
+  conceptLabel: string;
+}
+
+/**
+ * Direct conceptual equivalences so valid intuitive definitions (like
+ * "множество R — это любое не мнимое число") are NEVER unfairly marked "Не помню".
+ */
+const SEMANTIC_EQUIVALENCES: SemanticEquivalenceRule[] = [
+  {
+    cardSignals: ['вещественн', 'действительн', 'множество r', 'множество чисел r', '\\mathbb{r}'],
+    studentPatterns: [
+      /не\s*мним/i,
+      /без\s+мним/i,
+      /не\s+комплексн/i,
+      /на\s+числов(ой|ую)\s+(прям|ос)/i,
+      /рациональн.*иррациональн|иррациональн.*рациональн/i,
+      /любое\s+(обычн|реальн|вещественн|действительн)/i,
+      /все\s+(действительн|вещественн|реальн|обычн)/i,
+      /бесконечн.*десятичн/i,
+    ],
+    minScore: 68,
+    conceptLabel: 'Интуитивно верное определение множества ℝ (действительные / не мнимые числа)',
+  },
+  {
+    cardSignals: ['натуральн', '\\mathbb{n}'],
+    studentPatterns: [
+      /для\s+счет/i,
+      /цел\w*\s+положительн/i,
+      /положительн\w*\s+цел/i,
+      /1\s*,?\s*2\s*,?\s*3/i,
+    ],
+    minScore: 68,
+    conceptLabel: 'Верная суть натуральных чисел ℕ',
+  },
+  {
+    cardSignals: ['целые числ', 'множество z', '\\mathbb{z}'],
+    studentPatterns: [
+      /без\s+дробн/i,
+      /отрицательн.*нол.*положительн|натуральн.*нол.*отрицательн/i,
+      /натуральн.*противоположн/i,
+    ],
+    minScore: 68,
+    conceptLabel: 'Верная суть множества целых чисел ℤ',
+  },
+  {
+    cardSignals: ['рациональн', 'множество q', '\\mathbb{q}'],
+    studentPatterns: [
+      /в\s+виде\s+дроб/i,
+      /отношен\w*\s+(двух\s+)?цел/i,
+      /p\s*\/\s*q|m\s*\/\s*n/i,
+      /периодическ\w*\s+десятичн/i,
+    ],
+    minScore: 68,
+    conceptLabel: 'Верная суть множества рациональных чисел ℚ',
+  },
+  {
+    cardSignals: ['иррациональн'],
+    studentPatterns: [
+      /нельзя\s+(представить|записать)\s+(в\s+виде\s+)?дроб/i,
+      /не\s+представим\w*\s+дроб/i,
+      /бесконечн\w*\s+непериодическ/i,
+    ],
+    minScore: 68,
+    conceptLabel: 'Верная суть иррациональных чисел',
+  },
+  {
+    cardSignals: ['бесконечно мал', 'б.м.ф', 'бмф'],
+    studentPatterns: [
+      /стремит\w*\s+к\s*(0|нул)/i,
+      /предел\s+(равен\s+|=\s*)?(0|нул)/i,
+    ],
+    minScore: 66,
+    conceptLabel: 'Верная суть б.м.ф. (предел равен 0)',
+  },
+  {
+    cardSignals: ['бесконечно больш', 'б.б.ф', 'ббф'],
+    studentPatterns: [
+      /стремит\w*\s+к\s*бесконечн/i,
+      /предел\s+(равен\s+|=\s*)?бесконечн/i,
+      /неограничен\w*\s+(раст|возраста|увелич)/i,
+    ],
+    minScore: 66,
+    conceptLabel: 'Верная суть б.б.ф. (стремится к бесконечности)',
+  },
+  {
+    cardSignals: ['непрерывн'],
+    studentPatterns: [
+      /предел\s+(равен|совпадает)\s+.*значен/i,
+      /без\s+(разрыв|скачк|отрыва)/i,
+      /односторонн\w*\s+предел\w*\s+равн/i,
+    ],
+    minScore: 64,
+    conceptLabel: 'Верное понимание непрерывности функции',
+  },
+  {
+    cardSignals: ['ортогональн'],
+    studentPatterns: [
+      /перпендикулярн/i,
+      /угол\s*(равен\s*|=\s*)?90|прям\w*\s+угол/i,
+      /скалярн\w*\s+(произведен\w*\s+)?(равн\w*\s+|=\s*)?(0|нул)/i,
+    ],
+    minScore: 68,
+    conceptLabel: 'Верное понимание ортогональности',
+  },
+  {
+    cardSignals: ['коллинеарн'],
+    studentPatterns: [
+      /параллельн/i,
+      /на\s+одной\s+прям/i,
+      /координат\w*\s+пропорциональн/i,
+    ],
+    minScore: 68,
+    conceptLabel: 'Верное понимание коллинеарности',
+  },
+  {
+    cardSignals: ['компланарн'],
+    studentPatterns: [
+      /в\s+одной\s+плоскост/i,
+      /параллельн\w*\s+одной\s+плоскост/i,
+      /смешанн\w*\s+(произведен\w*\s+)?(равн\w*\s+|=\s*)?(0|нул)/i,
+    ],
+    minScore: 68,
+    conceptLabel: 'Верное понимание компланарности',
+  },
+  {
+    cardSignals: ['невырожденн'],
+    studentPatterns: [
+      /(определитель|детерминант|det)\s*(не\s*равен|!=|≠)\s*(0|нул)/i,
+    ],
+    minScore: 68,
+    conceptLabel: 'Верное условие невырожденности (det ≠ 0)',
+  },
+  {
+    cardSignals: ['вырожденн'],
+    studentPatterns: [
+      /(определитель|детерминант|det)\s*(равен|=)\s*(0|нул)/i,
+    ],
+    minScore: 68,
+    conceptLabel: 'Верное условие вырожденности (det = 0)',
+  },
+  {
+    cardSignals: ['ссылка', 'ссылки'],
+    studentPatterns: [
+      /второе\s+имя|псевдоним|алиас|alias/i,
+      /нельзя\s+перенаправ/i,
+    ],
+    minScore: 66,
+    conceptLabel: 'Верное определение ссылки (псевдоним / второе имя)',
+  },
+  {
+    cardSignals: ['указатель', 'указатели'],
+    studentPatterns: [
+      /хранит\s+адрес|содержит\s+адрес|переменная.*адрес/i,
+    ],
+    minScore: 66,
+    conceptLabel: 'Верное определение указателя (хранит адрес)',
+  },
+  {
+    cardSignals: ['стек', 'lifo'],
+    studentPatterns: [
+      /последн\w*\s+(приш|заш|вош).*перв\w*\s+(уш|выш)/i,
+      /lifo/i,
+      /с\s+одного\s+конц/i,
+    ],
+    minScore: 66,
+    conceptLabel: 'Верный принцип стека (LIFO)',
+  },
+  {
+    cardSignals: ['очеред', 'fifo'],
+    studentPatterns: [
+      /перв\w*\s+(приш|заш|вош).*перв\w*\s+(уш|выш)/i,
+      /fifo/i,
+      /в\s+конец.*из\s+начал/i,
+    ],
+    minScore: 66,
+    conceptLabel: 'Верный принцип очереди (FIFO)',
+  },
+];
+
+const STOP_WORDS = new Set([
+  'это',
+  'или',
+  'для',
+  'при',
+  'как',
+  'что',
+  'где',
+  'если',
+  'тогда',
+  'которая',
+  'которые',
+  'который',
+  'которое',
+  'используется',
+  'позволяет',
+  'представляет',
+  'называется',
+  'называют',
+  'является',
+  'такое',
+  'такой',
+  'такие',
+  'между',
+  'через',
+  'после',
+  'перед',
+  'всегда',
+  'может',
+  'можно',
+  'нужно',
+  'быть',
+]);
+
 function normalizeWord(w: string): string {
-  return w.toLowerCase().replace(/ё/g, 'е').trim();
+  return w
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[«»"“”„'`]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function getStem(word: string): string {
@@ -631,13 +1136,20 @@ function getStem(word: string): string {
   if (/^[a-z0-9_]+$/.test(norm)) {
     return norm;
   }
-  if (norm.length >= 7) return norm.slice(0, 5);
-  if (norm.length >= 5) return norm.slice(0, 4);
+  if (norm.length >= 8) return norm.slice(0, 6);
+  if (norm.length >= 6) return norm.slice(0, 5);
+  if (norm.length >= 4) return norm.slice(0, 4);
   return norm;
 }
 
+function extractMeaningfulWords(text: string): string[] {
+  const matches = normalizeWord(text).match(/[a-zа-я0-9_]{3,}/g) ?? [];
+  return matches.filter((w) => !STOP_WORDS.has(w));
+}
+
 /**
- * Local human-toned fallback evaluator (used if backend API is unreachable).
+ * Local human-toned fallback evaluator (used if backend API is unreachable or in Autonomous Mode).
+ * Understands synonyms, intuitive mathematical paraphrases, and concise accurate definitions.
  */
 export function evaluateStudentAnswer(
   card: TheoryCard,
@@ -658,25 +1170,41 @@ export function evaluateStudentAnswer(
   }
 
   const kwObj = getCardQuizPromptAndKeyword(card);
+  const fullCardContext = normalizeWord(
+    `${card.question} ${kwObj.keyword} ${card.keyThesis} ${card.answerPoints.join(' ')} ${card.mathFormulaLatex ?? ''}`,
+  );
   const referenceSource = normalizeWord(
     `${kwObj.keyword} ${card.keyThesis} ${card.answerPoints.join(' ')}`,
   );
 
-  // Check semantic clauses (thesis + answerPoints)
+  // 1. Check direct conceptual equivalences (prevents false "again" on valid intuitive paraphrases!)
+  let semanticFloorScore = 0;
+  const semanticHits: string[] = [];
+  for (const rule of SEMANTIC_EQUIVALENCES) {
+    const cardMatches = rule.cardSignals.some((sig) =>
+      fullCardContext.includes(normalizeWord(sig)),
+    );
+    if (!cardMatches) continue;
+    if (rule.studentPatterns.some((rx) => rx.test(cleanUser))) {
+      semanticFloorScore = Math.max(semanticFloorScore, rule.minScore);
+      semanticHits.push(rule.conceptLabel);
+    }
+  }
+
+  // 2. Check semantic clauses (thesis + answerPoints)
   const allClauses = [card.keyThesis, ...card.answerPoints.slice(0, 4)];
-  const matchedIdeas: string[] = [];
+  const matchedIdeas: string[] = [...semanticHits];
   const missedIdeas: string[] = [];
+  let thesisMatched = false;
 
-  for (const clause of allClauses) {
+  for (let idx = 0; idx < allClauses.length; idx++) {
+    const clause = allClauses[idx];
     const clauseNorm = normalizeWord(clause);
-    const words =
-      clauseNorm
-        .match(/[a-zA-Zа-яА-ЯёЁ0-9_]{4,}/g)
-        ?.filter((w) => !['которая', 'которые', 'который', 'используется', 'позволяет', 'представляет'].includes(w)) ?? [];
-
+    const words = extractMeaningfulWords(clauseNorm);
     if (words.length === 0) continue;
 
     let hits = 0;
+    let groupHitInClause = false;
     for (const w of words) {
       const stem = getStem(w);
       let matched = cleanUser.includes(stem);
@@ -687,6 +1215,7 @@ export function evaluateStudentAnswer(
             group.some((g) => cleanUser.includes(g))
           ) {
             matched = true;
+            groupHitInClause = true;
             break;
           }
         }
@@ -698,7 +1227,8 @@ export function evaluateStudentAnswer(
     const shortLabel =
       clause.length > 68 ? `${clause.slice(0, 65).trim()}...` : clause;
 
-    if (ratio >= 0.32) {
+    if (ratio >= 0.25 || (groupHitInClause && ratio >= 0.18)) {
+      if (idx === 0) thesisMatched = true;
       matchedIdeas.push(shortLabel);
     } else {
       missedIdeas.push(shortLabel);
@@ -710,32 +1240,61 @@ export function evaluateStudentAnswer(
     mainKw.length >= 2 &&
     (cleanUser.includes(mainKw) || cleanUser.includes(getStem(mainKw)));
 
-  // Also check overall synonym/concept overlap
-  let bonus = mainHit ? 20 : 0;
+  // 3. Synonym group overlap across the whole card (question + answer)
+  let groupBonus = mainHit ? 20 : 0;
+  let matchedGroupCount = 0;
   for (const group of SYNONYM_GROUPS) {
     if (
-      group.some((g) => referenceSource.includes(g)) &&
+      group.some((g) => fullCardContext.includes(g)) &&
       group.some((g) => cleanUser.includes(g))
     ) {
-      bonus += 15;
+      matchedGroupCount++;
+      groupBonus += matchedGroupCount <= 2 ? 22 : 12;
     }
   }
 
-  const ideaRatio = matchedIdeas.length / Math.max(1, allClauses.length);
-  const lengthFactor = cleanUser.split(/\s+/).length >= 8 ? 15 : 5;
-  const scorePct = Math.min(
-    100,
-    Math.round(ideaRatio * 80 + bonus + (matchedIdeas.length > 0 ? lengthFactor : 0)),
+  // 4. Token-level precision bonus for concise, accurate answers
+  const userWords = extractMeaningfulWords(cleanUser);
+  const refWords = new Set(extractMeaningfulWords(referenceSource).map(getStem));
+  let userRefHits = 0;
+  for (const uw of userWords) {
+    const st = getStem(uw);
+    if (refWords.has(st) || referenceSource.includes(st)) {
+      userRefHits++;
+    }
+  }
+  const precisionRatio =
+    userWords.length > 0 ? userRefHits / userWords.length : 0;
+  const conciseAccuracyBonus =
+    userWords.length >= 2 && precisionRatio >= 0.45 ? 18 : 0;
+
+  const clauseMatchCount = matchedIdeas.length - semanticHits.length;
+  const ideaRatio = clauseMatchCount / Math.max(1, allClauses.length);
+  const thesisBonus = thesisMatched ? 14 : 0;
+  const lengthBonus =
+    userWords.length >= 6 && (clauseMatchCount > 0 || matchedGroupCount > 0)
+      ? 10
+      : userWords.length >= 2 && (clauseMatchCount > 0 || matchedGroupCount > 0)
+        ? 6
+        : 0;
+
+  const rawScore = Math.round(
+    ideaRatio * 70 +
+      groupBonus +
+      thesisBonus +
+      conciseAccuracyBonus +
+      lengthBonus,
   );
+  const scorePct = Math.min(100, Math.max(rawScore, semanticFloorScore));
 
   const localFollowUp =
     missedIdeas[0]
-      ? `Уточните своими словами: как именно здесь работает «${missedIdeas[0]}»?`
+      ? `Уточните своими словами (для строгой формулировки): как здесь устроено «${missedIdeas[0]}»?`
       : card.examTip
         ? `На защите часто ловят на нюансе: «${card.examTip}». Поясните, почему это важно?`
         : '';
 
-  if (scorePct >= 76) {
+  if (scorePct >= 74) {
     return {
       scorePct,
       recommendedGrade: 'easy',
@@ -749,13 +1308,15 @@ export function evaluateStudentAnswer(
     };
   }
 
-  if (scorePct >= 50) {
+  if (scorePct >= 48) {
     return {
       scorePct,
       recommendedGrade: 'good',
-      verdictTitle: 'Хорошее понимание сути — «3 · Хорошо»',
+      verdictTitle: 'Суть понята верно — «3 · Хорошо»',
       verdictDetail:
-        'Главная мысль верная, видно, что тему ты понимаешь. На экзамене ответ засчитывается, но стоит уточнить оставшиеся детали ниже.',
+        semanticHits.length > 0
+          ? 'По смыслу ответ верный! Ты дал понятное интуитивное определение. Для идеала на устной защите добавь строгую формулировку из эталона ниже.'
+          : 'Главная мысль верная, видно, что тему ты понимаешь. На экзамене ответ засчитывается, но стоит уточнить оставшиеся детали ниже.',
       matchedKeywords: matchedIdeas.slice(0, 4),
       missedKeywords: missedIdeas.slice(0, 3),
       followUpQuestion: localFollowUp,
@@ -763,13 +1324,13 @@ export function evaluateStudentAnswer(
     };
   }
 
-  if (scorePct >= 24) {
+  if (scorePct >= 22) {
     return {
       scorePct,
       recommendedGrade: 'hard',
-      verdictTitle: 'Мысль в верную сторону, но сыро — «2 · Сложно»',
+      verdictTitle: 'Мысль в верную сторону, но неполно — «2 · Сложно»',
       verdictDetail:
-        'Ты зацепил только часть темы, но для уверенного ответа на экзамене не хватает полной формулировки и условий. Посмотри эталон ниже.',
+        'Ты зацепил верное направление, но для уверенного ответа на экзамене не хватает полной формулировки и условий. Посмотри эталон ниже.',
       matchedKeywords: matchedIdeas.slice(0, 3),
       missedKeywords: missedIdeas.slice(0, 3),
       followUpQuestion: localFollowUp,

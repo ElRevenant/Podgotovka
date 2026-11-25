@@ -65,14 +65,14 @@ export function LecturesLibrary({category}: LecturesLibraryProps) {
         <div className="px-1 pb-2 border-b border-slate-100 dark:border-white/[0.08]">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F3F4F6]">
             {category === 'rk'
-              ? 'PDF-документ Рубежного контроля №2'
+              ? 'PDF-материалы по Ангему (РК 1, РК 2 и Экзамен)'
               : category === 'matan'
                 ? 'PDF-документы Экзамена по Матану'
                 : 'Исходные PDF-материалы курса АИП'}
           </h2>
           <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-0.5 tabular-nums">
             {category === 'rk'
-              ? 'Ангем РК 2 · 4 страницы (теория, задачи, типовой билет)'
+              ? `${visibleLectures.length} PDF-документов · ${visibleLectures.reduce((sum, d) => sum + d.pageCount, 0)} стр.: РК 1, РК 2 и лекции 1–5, 8–9`
               : category === 'matan'
                 ? `${visibleLectures.length} PDF-документов · ${visibleLectures.reduce((sum, d) => sum + d.pageCount, 0)} стр.: теория, задачи G22 и 3 методички МГТУ Ч.1–3`
                 : `${visibleLectures.length} документов · перечень и 8 лекций`}

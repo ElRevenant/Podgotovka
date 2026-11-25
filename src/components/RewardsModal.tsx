@@ -39,9 +39,12 @@ import {
 import {DEFAULT_REWARDS} from '../utils/rewards';
 import {getCardSRState} from '../utils/spacedRepetition';
 
+export const SESSION_ACHIEVEMENTS_TOTAL = 136;
+
 export type SessionAchievementCategory =
   | 'all'
   | 'theory'
+  | 'subjects'
   | 'sm2_streaks'
   | 'practice'
   | 'blitz_arena'
@@ -243,14 +246,14 @@ export function RewardsModal({
     : 0;
 
   const streakFreezesCount = rewardState.streakFreezes ?? 0;
-  const canBuyFreeze = rewardState.balanceXp >= 150 && streakFreezesCount < 3;
+  const canBuyFreeze = rewardState.balanceXp >= 250 && streakFreezesCount < 3;
 
   const claimedSet = useMemo(
     () => new Set(rewardState.claimedAchievementIds ?? []),
     [rewardState.claimedAchievementIds],
   );
 
-  // Compute all 52 Winter Session Hall of Achievements across 7 categories
+  // Compute all 136 Winter Session Hall of Achievements across 8 categories
   const sessionAchievements = useMemo<SessionAchievementItem[]>(() => {
     const allEntries = Object.entries(srMap);
     const allSrValues = allEntries.map(([, s]) => s);
@@ -264,13 +267,15 @@ export function RewardsModal({
     let matanAnyKnown = 0;
     let rkAnyKnown = 0;
     let aipAnyKnown = 0;
+    let cppBookKnown = 0;
     for (const [idStr, s] of allEntries) {
       if (s.status !== 'known') continue;
       const id = Number(idStr);
       if (id >= 501 && id <= 549) matanTheoremsKnown++;
       if (id >= 501 && id <= 650) matanAnyKnown++;
-      if (id >= 201 && id <= 250) rkAnyKnown++;
-      if (id >= 1 && id <= 100) aipAnyKnown++;
+      if (id >= 201 && id <= 350) rkAnyKnown++;
+      if (id >= 1 && id <= 150) aipAnyKnown++;
+      if (id >= 63 && id <= 90) cppBookKnown++;
     }
     const minKnownAcross3Subjects = Math.min(
       matanAnyKnown,
@@ -284,18 +289,12 @@ export function RewardsModal({
         activeDeckKnown++;
       }
     }
-    const quarterDeckTarget = Math.max(
-      1,
-      Math.ceil(activeCategoryCards.length * 0.25),
-    );
-    const halfDeckTarget = Math.max(
-      1,
-      Math.ceil(activeCategoryCards.length * 0.5),
-    );
-    const threeQuarterDeckTarget = Math.max(
-      1,
-      Math.ceil(activeCategoryCards.length * 0.75),
-    );
+    const deckLen = Math.max(1, activeCategoryCards.length);
+    const tenPctDeckTarget = Math.max(1, Math.ceil(deckLen * 0.1));
+    const quarterDeckTarget = Math.max(1, Math.ceil(deckLen * 0.25));
+    const halfDeckTarget = Math.max(1, Math.ceil(deckLen * 0.5));
+    const threeQuarterDeckTarget = Math.max(1, Math.ceil(deckLen * 0.75));
+    const fullDeckTarget = deckLen;
 
     const notesCount = Object.values(cardNotes).filter(
       (n) => typeof n === 'string' && n.trim().length > 0,
@@ -315,11 +314,11 @@ export function RewardsModal({
         activeTasksSolved++;
       }
     }
-    const halfTasksTarget = Math.max(
-      1,
-      Math.ceil(Math.max(2, activeCategoryTasks.length) * 0.5),
-    );
-    const activeTasksForHalf =
+    const activeTasksLen = Math.max(2, activeCategoryTasks.length);
+    const quarterTasksTarget = Math.max(1, Math.ceil(activeTasksLen * 0.25));
+    const halfTasksTarget = Math.max(1, Math.ceil(activeTasksLen * 0.5));
+    const fullTasksTarget = activeTasksLen;
+    const activeTasksProgress =
       activeCategoryTasks.length > 0 ? activeTasksSolved : totalSolvedAll;
 
     let totalFocusMinutes = 0;
@@ -339,645 +338,193 @@ export function RewardsModal({
     const effectiveStreak = Math.max(currentStreak, bestStreak);
     const bestQuizPct = quizStats.bestScorePct || 0;
     const totalQuizzes = quizStats.completedCount || 0;
+    const totalQuizQuestions = quizStats.totalQuestionsAnswered || 0;
+
+    const mk = (
+      id: string,
+      title: string,
+      description: string,
+      category: Exclude<SessionAchievementCategory, 'all'>,
+      categoryLabel: string,
+      rewardXp: number,
+      current: number,
+      target: number,
+      unitLabel: string,
+      icon: SessionAchievementItem['icon'],
+    ): SessionAchievementItem => ({
+      id,
+      title,
+      description,
+      category,
+      categoryLabel,
+      rewardXp,
+      current,
+      target,
+      unitLabel,
+      icon,
+    });
+
+    const T = 'Теория и память';
+    const SUB = 'Предметы';
+    const SM = 'Серии и SM-2';
+    const PR = 'Практика и ФН-12';
+    const BL = 'Блиц и арена';
+    const WF = 'Зимний режим и фокус';
+    const NT = 'Конспекты и база';
+    const BS = 'Боссы Бауманки';
 
     return [
-      // ==================== КАТЕГОРИЯ 1 · ТЕОРИЯ И ПАМЯТЬ (10) ====================
-      {
-        id: 'ach_first_snow',
-        title: 'Первый след на снегу',
-        description: 'Выучить (статус «Выучено») первые 5 карточек теории',
-        category: 'theory',
-        categoryLabel: 'Теория и память',
-        rewardXp: 15,
-        current: totalKnownAll,
-        target: 5,
-        unitLabel: 'карт.',
-        icon: 'snow',
-      },
-      {
-        id: 'ach_theory_15',
-        title: 'Конспект первокурсника',
-        description: 'Довести 15 карточек теории до статуса «Выучено»',
-        category: 'theory',
-        categoryLabel: 'Теория и память',
-        rewardXp: 25,
-        current: totalKnownAll,
-        target: 15,
-        unitLabel: 'карт.',
-        icon: 'snow',
-      },
-      {
-        id: 'ach_theory_30',
-        title: 'База фундамента',
-        description: 'Выучить 30 карточек теории по любым предметам',
-        category: 'theory',
-        categoryLabel: 'Теория и память',
-        rewardXp: 35,
-        current: totalKnownAll,
-        target: 30,
-        unitLabel: 'карт.',
-        icon: 'layers',
-      },
-      {
-        id: 'ach_deck_quarter',
-        title: 'Четверть дистанции',
-        description: 'Выучить не менее 25% карточек активного предмета',
-        category: 'theory',
-        categoryLabel: 'Теория и память',
-        rewardXp: 30,
-        current: activeDeckKnown,
-        target: quarterDeckTarget,
-        unitLabel: 'карт.',
-        icon: 'layers',
-      },
-      {
-        id: 'ach_deck_half',
-        title: 'Экватор колоды',
-        description: 'Выучить не менее 50% карточек активного предмета',
-        category: 'theory',
-        categoryLabel: 'Теория и память',
-        rewardXp: 45,
-        current: activeDeckKnown,
-        target: halfDeckTarget,
-        unitLabel: 'карт.',
-        icon: 'layers',
-      },
-      {
-        id: 'ach_deck_75',
-        title: 'Штурм кафедры (75% колоды)',
-        description: 'Выучить не менее 75% карточек активного предмета',
-        category: 'theory',
-        categoryLabel: 'Теория и память',
-        rewardXp: 65,
-        current: activeDeckKnown,
-        target: threeQuarterDeckTarget,
-        unitLabel: 'карт.',
-        icon: 'admitted',
-      },
-      {
-        id: 'ach_theory_60',
-        title: 'Архивариус лекций',
-        description: 'Выучить суммарно 60 карточек по всем предметам сессии',
-        category: 'theory',
-        categoryLabel: 'Теория и память',
-        rewardXp: 60,
-        current: totalKnownAll,
-        target: 60,
-        unitLabel: 'карт.',
-        icon: 'layers',
-      },
-      {
-        id: 'ach_theory_100',
-        title: 'Сто теорем в голове',
-        description: 'Выучить суммарно 100 карточек теории по всем предметам',
-        category: 'theory',
-        categoryLabel: 'Теория и память',
-        rewardXp: 90,
-        current: totalKnownAll,
-        target: 100,
-        unitLabel: 'карт.',
-        icon: 'crystal',
-      },
-      {
-        id: 'ach_theory_150',
-        title: 'Ходячий учебник ФН-12',
-        description: 'Выучить суммарно 150 карточек теории и определений',
-        category: 'theory',
-        categoryLabel: 'Теория и память',
-        rewardXp: 120,
-        current: totalKnownAll,
-        target: 150,
-        unitLabel: 'карт.',
-        icon: 'automat',
-      },
-      {
-        id: 'ach_matan_theorems_25',
-        title: 'Доказано на доске (25 теорем Матана)',
-        description: 'Выучить 25 официальных экзаменационных теорем Матана (№1–49)',
-        category: 'theory',
-        categoryLabel: 'Теория и память',
-        rewardXp: 75,
-        current: matanTheoremsKnown,
-        target: 25,
-        unitLabel: 'теорем',
-        icon: 'admitted',
-      },
+      // ==================== 1 · ТЕОРИЯ И ПАМЯТЬ (20) ====================
+      mk('ach_theory_1', 'Первая выученная карточка', 'Довести первую карточку до статуса «Выучено»', 'theory', T, 5, totalKnownAll, 1, 'карт.', 'snow'),
+      mk('ach_first_snow', 'Первый след на снегу', 'Выучить (статус «Выучено») первые 5 карточек теории', 'theory', T, 8, totalKnownAll, 5, 'карт.', 'snow'),
+      mk('ach_theory_10', 'Уверенная десятка', 'Выучить 10 карточек теории по любым предметам', 'theory', T, 10, totalKnownAll, 10, 'карт.', 'snow'),
+      mk('ach_theory_15', 'Конспект первокурсника', 'Довести 15 карточек теории до статуса «Выучено»', 'theory', T, 12, totalKnownAll, 15, 'карт.', 'snow'),
+      mk('ach_theory_20', 'Двадцатка знаний', 'Выучить 20 карточек теории по любым предметам', 'theory', T, 15, totalKnownAll, 20, 'карт.', 'layers'),
+      mk('ach_theory_30', 'База фундамента', 'Выучить 30 карточек теории по любым предметам', 'theory', T, 18, totalKnownAll, 30, 'карт.', 'layers'),
+      mk('ach_theory_45', 'Устойчивый каркас', 'Выучить 45 карточек теории по всем предметам', 'theory', T, 24, totalKnownAll, 45, 'карт.', 'layers'),
+      mk('ach_theory_60', 'Архивариус лекций', 'Выучить суммарно 60 карточек по всем предметам сессии', 'theory', T, 30, totalKnownAll, 60, 'карт.', 'layers'),
+      mk('ach_theory_80', 'Восемьдесят билетов', 'Выучить суммарно 80 карточек теории', 'theory', T, 36, totalKnownAll, 80, 'карт.', 'crystal'),
+      mk('ach_theory_100', 'Сто теорем в голове', 'Выучить суммарно 100 карточек теории по всем предметам', 'theory', T, 45, totalKnownAll, 100, 'карт.', 'crystal'),
+      mk('ach_theory_125', 'Большая библиотека', 'Выучить суммарно 125 карточек теории', 'theory', T, 52, totalKnownAll, 125, 'карт.', 'crystal'),
+      mk('ach_theory_150', 'Ходячий учебник ФН-12', 'Выучить суммарно 150 карточек теории и определений', 'theory', T, 60, totalKnownAll, 150, 'карт.', 'automat'),
+      mk('ach_theory_180', 'Хранитель курса (180)', 'Выучить суммарно 180 карточек теории', 'theory', T, 68, totalKnownAll, 180, 'карт.', 'automat'),
+      mk('ach_theory_220', 'Академик 1 семестра (220)', 'Выучить суммарно 220 карточек теории', 'theory', T, 78, totalKnownAll, 220, 'карт.', 'automat'),
+      mk('ach_theory_275', 'Полный свод знаний (275)', 'Выучить суммарно 275 карточек по всем предметам', 'theory', T, 90, totalKnownAll, 275, 'карт.', 'automat'),
+      mk('ach_deck_10', 'Разведка колоды (10%)', 'Выучить не менее 10% карточек активного предмета', 'theory', T, 8, activeDeckKnown, tenPctDeckTarget, 'карт.', 'snow'),
+      mk('ach_deck_quarter', 'Четверть дистанции', 'Выучить не менее 25% карточек активного предмета', 'theory', T, 15, activeDeckKnown, quarterDeckTarget, 'карт.', 'layers'),
+      mk('ach_deck_half', 'Экватор колоды', 'Выучить не менее 50% карточек активного предмета', 'theory', T, 25, activeDeckKnown, halfDeckTarget, 'карт.', 'layers'),
+      mk('ach_deck_75', 'Штурм кафедры (75% колоды)', 'Выучить не менее 75% карточек активного предмета', 'theory', T, 35, activeDeckKnown, threeQuarterDeckTarget, 'карт.', 'admitted'),
+      mk('ach_deck_100', 'Идеальная колода (100%)', 'Выучить абсолютно все карточки активного предмета', 'theory', T, 65, activeDeckKnown, fullDeckTarget, 'карт.', 'automat'),
 
-      // ==================== КАТЕГОРИЯ 2 · СЕРИИ И SM-2 (8) ====================
-      {
-        id: 'ach_box4_5',
-        title: 'Первые кристаллы (Коробка 4)',
-        description: 'Довести 5 карточек до максимальной коробки 4 (мастерство 95%+)',
-        category: 'sm2_streaks',
-        categoryLabel: 'Серии и SM-2',
-        rewardXp: 25,
-        current: totalBox4All,
-        target: 5,
-        unitLabel: 'карт.',
-        icon: 'crystal',
-      },
-      {
-        id: 'ach_box4_master',
-        title: 'Хрустальная память (15× Коробка 4)',
-        description: 'Довести 15 карточек до максимальной коробки 4 (мастерство 95%+)',
-        category: 'sm2_streaks',
-        categoryLabel: 'Серии и SM-2',
-        rewardXp: 45,
-        current: totalBox4All,
-        target: 15,
-        unitLabel: 'карт.',
-        icon: 'crystal',
-      },
-      {
-        id: 'ach_box4_35',
-        title: 'Алмазный фонд SM-2 (35× Коробка 4)',
-        description: 'Довести 35 карточек до максимальной коробки 4 (95%+)',
-        category: 'sm2_streaks',
-        categoryLabel: 'Серии и SM-2',
-        rewardXp: 75,
-        current: totalBox4All,
-        target: 35,
-        unitLabel: 'карт.',
-        icon: 'crystal',
-      },
-      {
-        id: 'ach_box4_70',
-        title: 'Абсолютный ретеншн (70× Коробка 4)',
-        description: 'Довести 70 карточек до максимальной коробки 4 (95%+)',
-        category: 'sm2_streaks',
-        categoryLabel: 'Серии и SM-2',
-        rewardXp: 110,
-        current: totalBox4All,
-        target: 70,
-        unitLabel: 'карт.',
-        icon: 'automat',
-      },
-      {
-        id: 'ach_error_3',
-        title: 'Работа над ошибками',
-        description: 'Довести до «Выучено» 3 карточки, где ранее были ошибки или сбросы',
-        category: 'sm2_streaks',
-        categoryLabel: 'Серии и SM-2',
-        rewardXp: 25,
-        current: totalErrorSlayerAll,
-        target: 3,
-        unitLabel: 'карт.',
-        icon: 'shield',
-      },
-      {
-        id: 'ach_error_slayer',
-        title: 'Укротитель слабых мест',
-        description: 'Довести до статуса «Выучено» 7 карточек, на которых ранее были ошибки',
-        category: 'sm2_streaks',
-        categoryLabel: 'Серии и SM-2',
-        rewardXp: 45,
-        current: totalErrorSlayerAll,
-        target: 7,
-        unitLabel: 'карт.',
-        icon: 'shield',
-      },
-      {
-        id: 'ach_error_15',
-        title: 'Феникс зимней сессии',
-        description: 'Закрыть до статуса «Выучено» 15 ранее заваленных карточек',
-        category: 'sm2_streaks',
-        categoryLabel: 'Серии и SM-2',
-        rewardXp: 70,
-        current: totalErrorSlayerAll,
-        target: 15,
-        unitLabel: 'карт.',
-        icon: 'shield',
-      },
-      {
-        id: 'ach_error_30',
-        title: 'Непробиваемый иммунитет',
-        description: 'Закрыть до статуса «Выучено» 30 ранее проблемных карточек',
-        category: 'sm2_streaks',
-        categoryLabel: 'Серии и SM-2',
-        rewardXp: 100,
-        current: totalErrorSlayerAll,
-        target: 30,
-        unitLabel: 'карт.',
-        icon: 'shield',
-      },
+      // ==================== 2 · ПРЕДМЕТЫ: МАТАН, АНГЕМ, АИП (24) ====================
+      mk('ach_matan_theorems_5', 'Матан · Первые 5 теорем', 'Выучить 5 официальных теорем Матана (№1–49)', 'subjects', SUB, 10, matanTheoremsKnown, 5, 'теорем', 'board'),
+      mk('ach_matan_theorems_12', 'Матан · 12 теорем экзамена', 'Выучить 12 официальных теорем Матана (№1–49)', 'subjects', SUB, 18, matanTheoremsKnown, 12, 'теорем', 'board'),
+      mk('ach_matan_theorems_25', 'Доказано на доске (25 теорем Матана)', 'Выучить 25 официальных экзаменационных теорем Матана (№1–49)', 'subjects', SUB, 38, matanTheoremsKnown, 25, 'теорем', 'admitted'),
+      mk('ach_matan_theorems_38', 'Матан · 38 теорем экзамена', 'Выучить 38 официальных экзаменационных теорем Матана', 'subjects', SUB, 52, matanTheoremsKnown, 38, 'теорем', 'admitted'),
+      mk('ach_matan_theorems_49', 'Матан · Все 49 теорем ФН-12', 'Выучить все 49 официальных экзаменационных вопросов Матана', 'subjects', SUB, 75, matanTheoremsKnown, 49, 'теорем', 'automat'),
+      mk('ach_matan_10', 'Матан · Пределы и базы (10)', 'Выучить 10 карточек по Матану', 'subjects', SUB, 10, matanAnyKnown, 10, 'карт.', 'snow'),
+      mk('ach_matan_30', 'Матан · Непрерывность (30)', 'Выучить 30 карточек по Матану', 'subjects', SUB, 22, matanAnyKnown, 30, 'карт.', 'layers'),
+      mk('ach_matan_60', 'Матан · Дифференциал (60)', 'Выучить 60 карточек по Матану', 'subjects', SUB, 38, matanAnyKnown, 60, 'карт.', 'crystal'),
+      mk('ach_matan_90', 'Матан · Тейлор и асимптоты (90)', 'Выучить 90 карточек по Матану', 'subjects', SUB, 54, matanAnyKnown, 90, 'карт.', 'admitted'),
+      mk('ach_matan_115', 'Матан · Полный охват (115)', 'Выучить 115 карточек по Матану', 'subjects', SUB, 72, matanAnyKnown, 115, 'карт.', 'automat'),
+      mk('ach_rk_5', 'Ангем · Первые векторы (5)', 'Выучить 5 карточек по Аналитической геометрии', 'subjects', SUB, 8, rkAnyKnown, 5, 'карт.', 'snow'),
+      mk('ach_rk_15', 'Ангем · Базис и прямые (15)', 'Выучить 15 карточек по Ангему', 'subjects', SUB, 15, rkAnyKnown, 15, 'карт.', 'layers'),
+      mk('ach_rk_30', 'Ангем · Матрицы и СЛАУ (30)', 'Выучить 30 карточек по Ангему', 'subjects', SUB, 24, rkAnyKnown, 30, 'карт.', 'layers'),
+      mk('ach_rk_50', 'Ангем · РК 1 + РК 2 (50)', 'Выучить 50 карточек по Аналитической геометрии', 'subjects', SUB, 36, rkAnyKnown, 50, 'карт.', 'crystal'),
+      mk('ach_rk_75', 'Ангем · Поверхности и квадрики (75)', 'Выучить 75 карточек по Ангему', 'subjects', SUB, 52, rkAnyKnown, 75, 'карт.', 'admitted'),
+      mk('ach_rk_95', 'Ангем · Абсолютный базис (95)', 'Выучить 95 карточек по Аналитической геометрии', 'subjects', SUB, 68, rkAnyKnown, 95, 'карт.', 'automat'),
+      mk('ach_aip_5', 'АИП · Первый компилятор (5)', 'Выучить 5 карточек по АИП и C++', 'subjects', SUB, 8, aipAnyKnown, 5, 'карт.', 'snow'),
+      mk('ach_aip_15', 'АИП · Типы и циклы (15)', 'Выучить 15 карточек по АИП и C++', 'subjects', SUB, 15, aipAnyKnown, 15, 'карт.', 'layers'),
+      mk('ach_aip_30', 'АИП · Указатели и функции (30)', 'Выучить 30 карточек по АИП и C++', 'subjects', SUB, 24, aipAnyKnown, 30, 'карт.', 'layers'),
+      mk('ach_aip_50', 'АИП · Все 50 билетов (50)', 'Выучить 50 карточек по АИП и C++', 'subjects', SUB, 36, aipAnyKnown, 50, 'карт.', 'crystal'),
+      mk('ach_aip_70', 'АИП · Структуры и списки (70)', 'Выучить 70 карточек по АИП и C++', 'subjects', SUB, 50, aipAnyKnown, 70, 'карт.', 'admitted'),
+      mk('ach_aip_88', 'АИП · Мастер C++17 (88)', 'Выучить 88 карточек по АИП и учебнику C++', 'subjects', SUB, 66, aipAnyKnown, 88, 'карт.', 'automat'),
+      mk('ach_cpp_book_7', 'Учебник C++ · Четверть контрольных (7)', 'Выучить 7 карточек из учебника C++ (№63–90)', 'subjects', SUB, 12, cppBookKnown, 7, 'карт.', 'board'),
+      mk('ach_cpp_book_20', 'Учебник C++ · Модули РК 1–3 (20)', 'Выучить 20 карточек из учебника C++ (№63–90)', 'subjects', SUB, 30, cppBookKnown, 20, 'карт.', 'admitted'),
 
-      // ==================== КАТЕГОРИЯ 3 · ПРАКТИКА И БИЛЕТЫ ФН-12 (10) ====================
-      {
-        id: 'ach_tasks_1',
-        title: 'Первая задача у доски',
-        description: 'Самостоятельно решить первую практическую задачу без подсказок',
-        category: 'practice',
-        categoryLabel: 'Практика и ФН-12',
-        rewardXp: 15,
-        current: totalSolvedAll,
-        target: 1,
-        unitLabel: 'задач',
-        icon: 'board',
-      },
-      {
-        id: 'ach_tasks_3',
-        title: 'Разминка у доски',
-        description: 'Самостоятельно решить 3 практические задачи',
-        category: 'practice',
-        categoryLabel: 'Практика и ФН-12',
-        rewardXp: 25,
-        current: totalSolvedAll,
-        target: 3,
-        unitLabel: 'задач',
-        icon: 'board',
-      },
-      {
-        id: 'ach_tasks_7',
-        title: 'Семинарский зачёт',
-        description: 'Самостоятельно решить 7 практических задач',
-        category: 'practice',
-        categoryLabel: 'Практика и ФН-12',
-        rewardXp: 35,
-        current: totalSolvedAll,
-        target: 7,
-        unitLabel: 'задач',
-        icon: 'calc',
-      },
-      {
-        id: 'ach_tasks_12',
-        title: 'Инженерный расчёт',
-        description: 'Самостоятельно решить 12 практических задач',
-        category: 'practice',
-        categoryLabel: 'Практика и ФН-12',
-        rewardXp: 50,
-        current: totalSolvedAll,
-        target: 12,
-        unitLabel: 'задач',
-        icon: 'calc',
-      },
-      {
-        id: 'ach_tasks_25',
-        title: 'Решебник кафедры',
-        description: 'Самостоятельно решить 25 практических задач',
-        category: 'practice',
-        categoryLabel: 'Практика и ФН-12',
-        rewardXp: 75,
-        current: totalSolvedAll,
-        target: 25,
-        unitLabel: 'задач',
-        icon: 'practice',
-      },
-      {
-        id: 'ach_tasks_45',
-        title: 'Гроза задачников (45 задач)',
-        description: 'Самостоятельно решить 45 практических задач',
-        category: 'practice',
-        categoryLabel: 'Практика и ФН-12',
-        rewardXp: 110,
-        current: totalSolvedAll,
-        target: 45,
-        unitLabel: 'задач',
-        icon: 'automat',
-      },
-      {
-        id: 'ach_tasks_half',
-        title: 'Практик без подсказок (50%)',
-        description: 'Решить самостоятельно не менее 50% задач активного предмета',
-        category: 'practice',
-        categoryLabel: 'Практика и ФН-12',
-        rewardXp: 65,
-        current: activeTasksForHalf,
-        target: halfTasksTarget,
-        unitLabel: 'задач',
-        icon: 'practice',
-      },
-      {
-        id: 'ach_fn12_tickets_5',
-        title: 'Покоритель билетов 20-08 (I)',
-        description: 'Решить 5 задач из реальных экзаменационных билетов ФН-12 (№1–22)',
-        category: 'practice',
-        categoryLabel: 'Практика и ФН-12',
-        rewardXp: 40,
-        current: fn12TicketTasksSolved,
-        target: 5,
-        unitLabel: 'задач ФН-12',
-        icon: 'calc',
-      },
-      {
-        id: 'ach_fn12_tickets_15',
-        title: 'Покоритель билетов 20-08 (II)',
-        description: 'Решить 15 задач из реальных экзаменационных билетов ФН-12 (№1–22)',
-        category: 'practice',
-        categoryLabel: 'Практика и ФН-12',
-        rewardXp: 70,
-        current: fn12TicketTasksSolved,
-        target: 15,
-        unitLabel: 'задач ФН-12',
-        icon: 'practice',
-      },
-      {
-        id: 'ach_fn12_tickets_30',
-        title: 'Магистр билетов Крищенко (30 задач)',
-        description: 'Решить 30 задач из реальных экзаменационных билетов ФН-12 (20-08)',
-        category: 'practice',
-        categoryLabel: 'Практика и ФН-12',
-        rewardXp: 115,
-        current: fn12TicketTasksSolved,
-        target: 30,
-        unitLabel: 'задач ФН-12',
-        icon: 'automat',
-      },
+      // ==================== 3 · СЕРИИ И SM-2 (18) ====================
+      mk('ach_box4_1', 'Первый кристалл SM-2', 'Довести первую карточку до максимальной коробки 4 (95%+)', 'sm2_streaks', SM, 6, totalBox4All, 1, 'карт.', 'crystal'),
+      mk('ach_box4_5', 'Первые кристаллы (Коробка 4)', 'Довести 5 карточек до максимальной коробки 4 (мастерство 95%+)', 'sm2_streaks', SM, 14, totalBox4All, 5, 'карт.', 'crystal'),
+      mk('ach_box4_10', 'Десять граней (10× Коробка 4)', 'Довести 10 карточек до максимальной коробки 4 (95%+)', 'sm2_streaks', SM, 20, totalBox4All, 10, 'карт.', 'crystal'),
+      mk('ach_box4_master', 'Хрустальная память (15× Коробка 4)', 'Довести 15 карточек до максимальной коробки 4 (мастерство 95%+)', 'sm2_streaks', SM, 25, totalBox4All, 15, 'карт.', 'crystal'),
+      mk('ach_box4_25', 'Кварцевая выдержка (25× Коробка 4)', 'Довести 25 карточек до максимальной коробки 4 (95%+)', 'sm2_streaks', SM, 34, totalBox4All, 25, 'карт.', 'crystal'),
+      mk('ach_box4_35', 'Алмазный фонд SM-2 (35× Коробка 4)', 'Довести 35 карточек до максимальной коробки 4 (95%+)', 'sm2_streaks', SM, 42, totalBox4All, 35, 'карт.', 'crystal'),
+      mk('ach_box4_50', 'Полусотня кристаллов (50× Коробка 4)', 'Довести 50 карточек до максимальной коробки 4 (95%+)', 'sm2_streaks', SM, 52, totalBox4All, 50, 'карт.', 'crystal'),
+      mk('ach_box4_70', 'Абсолютный ретеншн (70× Коробка 4)', 'Довести 70 карточек до максимальной коробки 4 (95%+)', 'sm2_streaks', SM, 62, totalBox4All, 70, 'карт.', 'automat'),
+      mk('ach_box4_100', 'Сто кристаллов SM-2 (100× Коробка 4)', 'Довести 100 карточек до максимальной коробки 4 (95%+)', 'sm2_streaks', SM, 75, totalBox4All, 100, 'карт.', 'automat'),
+      mk('ach_box4_150', 'Вечный архив (150× Коробка 4)', 'Довести 150 карточек до максимальной коробки 4 (95%+)', 'sm2_streaks', SM, 92, totalBox4All, 150, 'карт.', 'automat'),
+      mk('ach_error_1', 'Первый реванш', 'Закрыть до «Выучено» первую карточку после ошибки', 'sm2_streaks', SM, 6, totalErrorSlayerAll, 1, 'карт.', 'shield'),
+      mk('ach_error_3', 'Работа над ошибками', 'Довести до «Выучено» 3 карточки, где ранее были ошибки или сбросы', 'sm2_streaks', SM, 12, totalErrorSlayerAll, 3, 'карт.', 'shield'),
+      mk('ach_error_5', 'Исправление пробелов (5)', 'Закрыть до «Выучено» 5 ранее проблемных карточек', 'sm2_streaks', SM, 16, totalErrorSlayerAll, 5, 'карт.', 'shield'),
+      mk('ach_error_slayer', 'Укротитель слабых мест', 'Довести до статуса «Выучено» 7 карточек, на которых ранее были ошибки', 'sm2_streaks', SM, 22, totalErrorSlayerAll, 7, 'карт.', 'shield'),
+      mk('ach_error_10', 'Десять реваншей', 'Закрыть до статуса «Выучено» 10 ранее заваленных карточек', 'sm2_streaks', SM, 28, totalErrorSlayerAll, 10, 'карт.', 'shield'),
+      mk('ach_error_15', 'Феникс зимней сессии', 'Закрыть до статуса «Выучено» 15 ранее заваленных карточек', 'sm2_streaks', SM, 36, totalErrorSlayerAll, 15, 'карт.', 'shield'),
+      mk('ach_error_30', 'Непробиваемый иммунитет', 'Закрыть до статуса «Выучено» 30 ранее проблемных карточек', 'sm2_streaks', SM, 52, totalErrorSlayerAll, 30, 'карт.', 'shield'),
+      mk('ach_error_50', 'Ноль уязвимостей (50)', 'Закрыть до статуса «Выучено» 50 ранее проблемных карточек', 'sm2_streaks', SM, 72, totalErrorSlayerAll, 50, 'карт.', 'automat'),
 
-      // ==================== КАТЕГОРИЯ 4 · БЛИЦ И АРЕНА (6) ====================
-      {
-        id: 'ach_quiz_first',
-        title: 'Боевое крещение тестом',
-        description: 'Завершить свой первый блиц-тест по любому предмету',
-        category: 'blitz_arena',
-        categoryLabel: 'Блиц и арена',
-        rewardXp: 15,
-        current: totalQuizzes,
-        target: 1,
-        unitLabel: 'тест',
-        icon: 'sniper',
-      },
-      {
-        id: 'ach_quiz_5_runs',
-        title: 'Серийный тестировщик',
-        description: 'Пройти до конца 5 блиц-тестов',
-        category: 'blitz_arena',
-        categoryLabel: 'Блиц и арена',
-        rewardXp: 30,
-        current: totalQuizzes,
-        target: 5,
-        unitLabel: 'тестов',
-        icon: 'sniper',
-      },
-      {
-        id: 'ach_quiz_15_runs',
-        title: 'Марафонец блиц-тестов',
-        description: 'Пройти до конца 15 блиц-тестов',
-        category: 'blitz_arena',
-        categoryLabel: 'Блиц и арена',
-        rewardXp: 55,
-        current: totalQuizzes,
-        target: 15,
-        unitLabel: 'тестов',
-        icon: 'blitz100',
-      },
-      {
-        id: 'ach_quiz_80',
-        title: 'Снайпер блиц-теста (80%+)',
-        description: 'Пройти блиц-тест с результатом не ниже 80%',
-        category: 'blitz_arena',
-        categoryLabel: 'Блиц и арена',
-        rewardXp: 35,
-        current: bestQuizPct,
-        target: 80,
-        unitLabel: '%',
-        icon: 'sniper',
-      },
-      {
-        id: 'ach_quiz_90',
-        title: 'Ювелирная точность (90%+)',
-        description: 'Пройти блиц-тест с результатом не ниже 90%',
-        category: 'blitz_arena',
-        categoryLabel: 'Блиц и арена',
-        rewardXp: 50,
-        current: bestQuizPct,
-        target: 90,
-        unitLabel: '%',
-        icon: 'sniper',
-      },
-      {
-        id: 'ach_quiz_100',
-        title: 'Безошибочный блиц (100%)',
-        description: 'Выбить 100% правильных ответов в блиц-тесте',
-        category: 'blitz_arena',
-        categoryLabel: 'Блиц и арена',
-        rewardXp: 75,
-        current: bestQuizPct,
-        target: 100,
-        unitLabel: '%',
-        icon: 'blitz100',
-      },
+      // ==================== 4 · ПРАКТИКА И БИЛЕТЫ ФН-12 (18) ====================
+      mk('ach_tasks_1', 'Первая задача у доски', 'Самостоятельно решить первую практическую задачу без подсказок', 'practice', PR, 8, totalSolvedAll, 1, 'задач', 'board'),
+      mk('ach_tasks_3', 'Разминка у доски', 'Самостоятельно решить 3 практические задачи', 'practice', PR, 12, totalSolvedAll, 3, 'задач', 'board'),
+      mk('ach_tasks_5', 'Пятёрка практических', 'Самостоятельно решить 5 практических задач', 'practice', PR, 16, totalSolvedAll, 5, 'задач', 'calc'),
+      mk('ach_tasks_7', 'Семинарский зачёт', 'Самостоятельно решить 7 практических задач', 'practice', PR, 20, totalSolvedAll, 7, 'задач', 'calc'),
+      mk('ach_tasks_12', 'Инженерный расчёт', 'Самостоятельно решить 12 практических задач', 'practice', PR, 26, totalSolvedAll, 12, 'задач', 'calc'),
+      mk('ach_tasks_18', 'Уверенный практикум (18)', 'Самостоятельно решить 18 практических задач', 'practice', PR, 32, totalSolvedAll, 18, 'задач', 'practice'),
+      mk('ach_tasks_25', 'Решебник кафедры', 'Самостоятельно решить 25 практических задач', 'practice', PR, 40, totalSolvedAll, 25, 'задач', 'practice'),
+      mk('ach_tasks_35', 'Сборник решений (35)', 'Самостоятельно решить 35 практических задач', 'practice', PR, 50, totalSolvedAll, 35, 'задач', 'practice'),
+      mk('ach_tasks_45', 'Гроза задачников (45 задач)', 'Самостоятельно решить 45 практических задач', 'practice', PR, 60, totalSolvedAll, 45, 'задач', 'automat'),
+      mk('ach_tasks_60', 'Эксперт практики (60 задач)', 'Самостоятельно решить 60 практических задач', 'practice', PR, 72, totalSolvedAll, 60, 'задач', 'automat'),
+      mk('ach_tasks_80', 'Легенда семинаров (80 задач)', 'Самостоятельно решить 80 практических задач', 'practice', PR, 88, totalSolvedAll, 80, 'задач', 'automat'),
+      mk('ach_tasks_quarter', 'Четверть практикума (25%)', 'Решить не менее 25% задач активного предмета', 'practice', PR, 16, activeTasksProgress, quarterTasksTarget, 'задач', 'board'),
+      mk('ach_tasks_half', 'Практик без подсказок (50%)', 'Решить самостоятельно не менее 50% задач активного предмета', 'practice', PR, 32, activeTasksProgress, halfTasksTarget, 'задач', 'practice'),
+      mk('ach_tasks_all', 'Все задачи предмета (100%)', 'Решить все практические задачи активного предмета', 'practice', PR, 60, activeTasksProgress, fullTasksTarget, 'задач', 'automat'),
+      mk('ach_fn12_tickets_2', 'Проба билетов ФН-12 (2)', 'Решить 2 задачи из реальных экзаменационных билетов ФН-12', 'practice', PR, 12, fn12TicketTasksSolved, 2, 'задач ФН-12', 'calc'),
+      mk('ach_fn12_tickets_5', 'Покоритель билетов 20-08 (I)', 'Решить 5 задач из реальных экзаменационных билетов ФН-12 (№1–22)', 'practice', PR, 20, fn12TicketTasksSolved, 5, 'задач ФН-12', 'calc'),
+      mk('ach_fn12_tickets_15', 'Покоритель билетов 20-08 (II)', 'Решить 15 задач из реальных экзаменационных билетов ФН-12 (№1–22)', 'practice', PR, 36, fn12TicketTasksSolved, 15, 'задач ФН-12', 'practice'),
+      mk('ach_fn12_tickets_30', 'Магистр билетов Крищенко (30 задач)', 'Решить 30 задач из реальных экзаменационных билетов ФН-12 (20-08)', 'practice', PR, 58, fn12TicketTasksSolved, 30, 'задач ФН-12', 'automat'),
 
-      // ==================== КАТЕГОРИЯ 5 · ЗИМНИЙ РЕЖИМ И ФОКУС (8) ====================
-      {
-        id: 'ach_focus_25',
-        title: 'Первая помидорка (25 мин)',
-        description: 'Накопить первые 25 минут чистого фокуса в таймере',
-        category: 'winter_focus',
-        categoryLabel: 'Зимний режим и фокус',
-        rewardXp: 20,
-        current: totalFocusMinutes,
-        target: 25,
-        unitLabel: 'мин',
-        icon: 'lamp',
-      },
-      {
-        id: 'ach_focus_50',
-        title: 'Тёплая лампа (50 мин фокуса)',
-        description: 'Накопить суммарно 50 минут чистого фокуса в Pomodoro-таймере',
-        category: 'winter_focus',
-        categoryLabel: 'Зимний режим и фокус',
-        rewardXp: 30,
-        current: totalFocusMinutes,
-        target: 50,
-        unitLabel: 'мин',
-        icon: 'lamp',
-      },
-      {
-        id: 'ach_focus_120',
-        title: 'Два часа тишины (120 мин)',
-        description: 'Накопить суммарно 120 минут чистого фокуса',
-        category: 'winter_focus',
-        categoryLabel: 'Зимний режим и фокус',
-        rewardXp: 45,
-        current: totalFocusMinutes,
-        target: 120,
-        unitLabel: 'мин',
-        icon: 'lamp',
-      },
-      {
-        id: 'ach_focus_180',
-        title: 'Ночной дозор (3 часа фокуса)',
-        description: 'Накопить суммарно 180 минут чистого фокуса по дневнику активности',
-        category: 'winter_focus',
-        categoryLabel: 'Зимний режим и фокус',
-        rewardXp: 65,
-        current: totalFocusMinutes,
-        target: 180,
-        unitLabel: 'мин',
-        icon: 'night',
-      },
-      {
-        id: 'ach_focus_360',
-        title: 'Глубокое погружение (6 часов фокуса)',
-        description: 'Накопить суммарно 360 минут чистого фокуса',
-        category: 'winter_focus',
-        categoryLabel: 'Зимний режим и фокус',
-        rewardXp: 95,
-        current: totalFocusMinutes,
-        target: 360,
-        unitLabel: 'мин',
-        icon: 'night',
-      },
-      {
-        id: 'ach_focus_600',
-        title: 'Монах зимней сессии (10 часов фокуса)',
-        description: 'Накопить суммарно 600 минут чистого фокуса за подготовку',
-        category: 'winter_focus',
-        categoryLabel: 'Зимний режим и фокус',
-        rewardXp: 140,
-        current: totalFocusMinutes,
-        target: 600,
-        unitLabel: 'мин',
-        icon: 'automat',
-      },
-      {
-        id: 'ach_streak_3',
-        title: 'Морозная выдержка (3 дня подряд)',
-        description: 'Заниматься подготовкой 3 дня подряд без пропусков',
-        category: 'winter_focus',
-        categoryLabel: 'Зимний режим и фокус',
-        rewardXp: 35,
-        current: effectiveStreak,
-        target: 3,
-        unitLabel: 'дн.',
-        icon: 'frost3',
-      },
-      {
-        id: 'ach_streak_7',
-        title: 'Неделя без тильта (7 дней подряд)',
-        description: 'Достичь серии из 7 дней подготовки подряд',
-        category: 'winter_focus',
-        categoryLabel: 'Зимний режим и фокус',
-        rewardXp: 75,
-        current: effectiveStreak,
-        target: 7,
-        unitLabel: 'дн.',
-        icon: 'streak7',
-      },
+      // ==================== 5 · БЛИЦ И АРЕНА (14) ====================
+      mk('ach_quiz_first', 'Боевое крещение тестом', 'Завершить свой первый блиц-тест по любому предмету', 'blitz_arena', BL, 8, totalQuizzes, 1, 'тест', 'sniper'),
+      mk('ach_quiz_3_runs', 'Разогрев блиц-арены (3)', 'Пройти до конца 3 блиц-теста', 'blitz_arena', BL, 12, totalQuizzes, 3, 'тестов', 'sniper'),
+      mk('ach_quiz_5_runs', 'Серийный тестировщик', 'Пройти до конца 5 блиц-тестов', 'blitz_arena', BL, 16, totalQuizzes, 5, 'тестов', 'sniper'),
+      mk('ach_quiz_10_runs', 'Десятка блицев', 'Пройти до конца 10 блиц-тестов', 'blitz_arena', BL, 24, totalQuizzes, 10, 'тестов', 'sniper'),
+      mk('ach_quiz_15_runs', 'Марафонец блиц-тестов', 'Пройти до конца 15 блиц-тестов', 'blitz_arena', BL, 30, totalQuizzes, 15, 'тестов', 'blitz100'),
+      mk('ach_quiz_25_runs', 'Гладиатор блица (25)', 'Пройти до конца 25 блиц-тестов', 'blitz_arena', BL, 42, totalQuizzes, 25, 'тестов', 'blitz100'),
+      mk('ach_quiz_50_runs', 'Чемпион арены (50)', 'Пройти до конца 50 блиц-тестов', 'blitz_arena', BL, 65, totalQuizzes, 50, 'тестов', 'automat'),
+      mk('ach_quiz_65', 'Зачётный блиц (65%+)', 'Пройти блиц-тест с результатом не ниже 65%', 'blitz_arena', BL, 10, bestQuizPct, 65, '%', 'sniper'),
+      mk('ach_quiz_80', 'Снайпер блиц-теста (80%+)', 'Пройти блиц-тест с результатом не ниже 80%', 'blitz_arena', BL, 18, bestQuizPct, 80, '%', 'sniper'),
+      mk('ach_quiz_90', 'Ювелирная точность (90%+)', 'Пройти блиц-тест с результатом не ниже 90%', 'blitz_arena', BL, 28, bestQuizPct, 90, '%', 'sniper'),
+      mk('ach_quiz_100', 'Безошибочный блиц (100%)', 'Выбить 100% правильных ответов в блиц-тесте', 'blitz_arena', BL, 42, bestQuizPct, 100, '%', 'blitz100'),
+      mk('ach_quiz_q_30', '30 ответов в блице', 'Ответить суммарно на 30 вопросов в блиц-тестах', 'blitz_arena', BL, 10, totalQuizQuestions, 30, 'вопр.', 'sniper'),
+      mk('ach_quiz_q_150', '150 ответов в блице', 'Ответить суммарно на 150 вопросов в блиц-тестах', 'blitz_arena', BL, 26, totalQuizQuestions, 150, 'вопр.', 'blitz100'),
+      mk('ach_quiz_q_400', '400 ответов в блице', 'Ответить суммарно на 400 вопросов в блиц-тестах', 'blitz_arena', BL, 48, totalQuizQuestions, 400, 'вопр.', 'automat'),
 
-      // ==================== КАТЕГОРИЯ 6 · КОНСПЕКТЫ И СВОЯ БАЗА (4) ====================
-      {
-        id: 'ach_notes_1',
-        title: 'Первая пометка на полях',
-        description: 'Добавить собственную заметку или мнемонику к 1 карточке',
-        category: 'notes_arsenal',
-        categoryLabel: 'Конспекты и база',
-        rewardXp: 15,
-        current: notesCount,
-        target: 1,
-        unitLabel: 'заметок',
-        icon: 'note',
-      },
-      {
-        id: 'ach_notes_author',
-        title: 'Авторские мнемоники (5 заметок)',
-        description: 'Написать собственные заметки или ассоциации минимум к 5 карточкам',
-        category: 'notes_arsenal',
-        categoryLabel: 'Конспекты и база',
-        rewardXp: 30,
-        current: notesCount,
-        target: 5,
-        unitLabel: 'заметок',
-        icon: 'note',
-      },
-      {
-        id: 'ach_notes_15',
-        title: 'Собственный конспект (15 заметок)',
-        description: 'Написать собственные заметки или шпаргалки к 15 карточкам',
-        category: 'notes_arsenal',
-        categoryLabel: 'Конспекты и база',
-        rewardXp: 55,
-        current: notesCount,
-        target: 15,
-        unitLabel: 'заметок',
-        icon: 'note',
-      },
-      {
-        id: 'ach_notes_30',
-        title: 'Соавтор методички (30 заметок)',
-        description: 'Написать собственные заметки или разборы к 30 карточкам',
-        category: 'notes_arsenal',
-        categoryLabel: 'Конспекты и база',
-        rewardXp: 85,
-        current: notesCount,
-        target: 30,
-        unitLabel: 'заметок',
-        icon: 'note',
-      },
+      // ==================== 6 · ЗИМНИЙ РЕЖИМ И ФОКУС (16) ====================
+      mk('ach_focus_10', 'Первые 10 минут тишины', 'Накопить первые 10 минут чистого фокуса в таймере', 'winter_focus', WF, 6, totalFocusMinutes, 10, 'мин', 'lamp'),
+      mk('ach_focus_25', 'Первая помидорка (25 мин)', 'Накопить первые 25 минут чистого фокуса в таймере', 'winter_focus', WF, 10, totalFocusMinutes, 25, 'мин', 'lamp'),
+      mk('ach_focus_50', 'Тёплая лампа (50 мин фокуса)', 'Накопить суммарно 50 минут чистого фокуса в Pomodoro-таймере', 'winter_focus', WF, 16, totalFocusMinutes, 50, 'мин', 'lamp'),
+      mk('ach_focus_90', 'Полная пара (90 мин фокуса)', 'Накопить суммарно 90 минут чистого фокуса (как университетская пара)', 'winter_focus', WF, 22, totalFocusMinutes, 90, 'мин', 'lamp'),
+      mk('ach_focus_120', 'Два часа тишины (120 мин)', 'Накопить суммарно 120 минут чистого фокуса', 'winter_focus', WF, 26, totalFocusMinutes, 120, 'мин', 'lamp'),
+      mk('ach_focus_180', 'Ночной дозор (3 часа фокуса)', 'Накопить суммарно 180 минут чистого фокуса по дневнику активности', 'winter_focus', WF, 34, totalFocusMinutes, 180, 'мин', 'night'),
+      mk('ach_focus_240', 'Четыре часа дзена (240 мин)', 'Накопить суммарно 240 минут чистого фокуса', 'winter_focus', WF, 42, totalFocusMinutes, 240, 'мин', 'night'),
+      mk('ach_focus_360', 'Глубокое погружение (6 часов фокуса)', 'Накопить суммарно 360 минут чистого фокуса', 'winter_focus', WF, 52, totalFocusMinutes, 360, 'мин', 'night'),
+      mk('ach_focus_600', 'Монах зимней сессии (10 часов фокуса)', 'Накопить суммарно 600 минут чистого фокуса за подготовку', 'winter_focus', WF, 72, totalFocusMinutes, 600, 'мин', 'automat'),
+      mk('ach_focus_900', 'Пятнадцать часов потока (900 мин)', 'Накопить суммарно 900 минут чистого фокуса', 'winter_focus', WF, 88, totalFocusMinutes, 900, 'мин', 'automat'),
+      mk('ach_focus_1200', 'Двадцать часов тишины (1200 мин)', 'Накопить суммарно 1200 минут чистого фокуса за сессию', 'winter_focus', WF, 105, totalFocusMinutes, 1200, 'мин', 'automat'),
+      mk('ach_streak_2', 'Два дня подряд', 'Заниматься подготовкой 2 дня подряд без пропусков', 'winter_focus', WF, 10, effectiveStreak, 2, 'дн.', 'frost3'),
+      mk('ach_streak_3', 'Морозная выдержка (3 дня подряд)', 'Заниматься подготовкой 3 дня подряд без пропусков', 'winter_focus', WF, 18, effectiveStreak, 3, 'дн.', 'frost3'),
+      mk('ach_streak_5', 'Ударная пятидневка (5 дней подряд)', 'Заниматься подготовкой 5 дней подряд без пропусков', 'winter_focus', WF, 28, effectiveStreak, 5, 'дн.', 'frost3'),
+      mk('ach_streak_7', 'Неделя без тильта (7 дней подряд)', 'Достичь серии из 7 дней подготовки подряд', 'winter_focus', WF, 40, effectiveStreak, 7, 'дн.', 'streak7'),
+      mk('ach_streak_10', 'Десять дней дисциплины', 'Достичь серии из 10 дней подготовки подряд', 'winter_focus', WF, 50, effectiveStreak, 10, 'дн.', 'streak7'),
 
-      // ==================== КАТЕГОРИЯ 7 · БОССЫ БАУМАНКИ (6) ====================
-      {
-        id: 'ach_streak_14',
-        title: 'Двухнедельный штурм (14 дней подряд)',
-        description: 'Держать непрерывную серию подготовки 14 дней подряд',
-        category: 'baumanka_boss',
-        categoryLabel: 'Боссы Бауманки',
-        rewardXp: 115,
-        current: effectiveStreak,
-        target: 14,
-        unitLabel: 'дн.',
-        icon: 'streak7',
-      },
-      {
-        id: 'ach_active_days_10',
-        title: 'Декада упорства (10 учебных дней)',
-        description: 'Заниматься подготовкой минимум в 10 разных дней по календарю',
-        category: 'baumanka_boss',
-        categoryLabel: 'Боссы Бауманки',
-        rewardXp: 70,
-        current: activeStudyDays,
-        target: 10,
-        unitLabel: 'дн.',
-        icon: 'frost3',
-      },
-      {
-        id: 'ach_ready_50',
-        title: 'Зачётная книжка открыта (50%+)',
-        description: 'Довести общую готовность активного предмета до 50% и выше',
-        category: 'baumanka_boss',
-        categoryLabel: 'Боссы Бауманки',
-        rewardXp: 40,
-        current: readinessPct,
-        target: 50,
-        unitLabel: '%',
-        icon: 'admitted',
-      },
-      {
-        id: 'ach_ready_75',
-        title: 'К зачёту допущен (75%+)',
-        description: 'Довести общую готовность активного предмета до 75% и выше',
-        category: 'baumanka_boss',
-        categoryLabel: 'Боссы Бауманки',
-        rewardXp: 65,
-        current: readinessPct,
-        target: 75,
-        unitLabel: '%',
-        icon: 'admitted',
-      },
-      {
-        id: 'ach_ready_95',
-        title: 'Автомат до боя курантов (95%+)',
-        description: 'Довести общую готовность активного предмета до 95%+',
-        category: 'baumanka_boss',
-        categoryLabel: 'Боссы Бауманки',
-        rewardXp: 110,
-        current: readinessPct,
-        target: 95,
-        unitLabel: '%',
-        icon: 'automat',
-      },
-      {
-        id: 'ach_all_3_subjects_10',
-        title: 'Триумвират ИУ / ФН (3 предмета × 10)',
-        description: 'Выучить минимум по 10 карточек в каждом из трёх предметов: Матан, Ангем и АИП',
-        category: 'baumanka_boss',
-        categoryLabel: 'Боссы Бауманки',
-        rewardXp: 125,
-        current: minKnownAcross3Subjects,
-        target: 10,
-        unitLabel: 'карт./предм.',
-        icon: 'automat',
-      },
+      // ==================== 7 · КОНСПЕКТЫ И СВОЯ БАЗА (10) ====================
+      mk('ach_notes_1', 'Первая пометка на полях', 'Добавить собственную заметку или мнемонику к 1 карточке', 'notes_arsenal', NT, 6, notesCount, 1, 'заметок', 'note'),
+      mk('ach_notes_3', 'Три подсказки себе', 'Написать собственные заметки к 3 карточкам', 'notes_arsenal', NT, 10, notesCount, 3, 'заметок', 'note'),
+      mk('ach_notes_author', 'Авторские мнемоники (5 заметок)', 'Написать собственные заметки или ассоциации минимум к 5 карточкам', 'notes_arsenal', NT, 15, notesCount, 5, 'заметок', 'note'),
+      mk('ach_notes_10', 'Личный словарик (10 заметок)', 'Написать собственные заметки к 10 карточкам', 'notes_arsenal', NT, 22, notesCount, 10, 'заметок', 'note'),
+      mk('ach_notes_15', 'Собственный конспект (15 заметок)', 'Написать собственные заметки или шпаргалки к 15 карточкам', 'notes_arsenal', NT, 28, notesCount, 15, 'заметок', 'note'),
+      mk('ach_notes_22', 'Тетрадь отличника (22 заметки)', 'Написать собственные заметки или разборы к 22 карточкам', 'notes_arsenal', NT, 36, notesCount, 22, 'заметок', 'note'),
+      mk('ach_notes_30', 'Соавтор методички (30 заметок)', 'Написать собственные заметки или разборы к 30 карточкам', 'notes_arsenal', NT, 45, notesCount, 30, 'заметок', 'note'),
+      mk('ach_notes_45', 'Архив шпаргалок (45 заметок)', 'Написать собственные заметки или разборы к 45 карточкам', 'notes_arsenal', NT, 58, notesCount, 45, 'заметок', 'note'),
+      mk('ach_notes_60', 'Автор курса (60 заметок)', 'Написать собственные заметки к 60 карточкам', 'notes_arsenal', NT, 72, notesCount, 60, 'заметок', 'automat'),
+      mk('ach_notes_80', 'Полная редакция конспекта (80)', 'Написать собственные заметки к 80 карточкам', 'notes_arsenal', NT, 90, notesCount, 80, 'заметок', 'automat'),
+
+      // ==================== 8 · БОССЫ БАУМАНКИ (16) ====================
+      mk('ach_streak_14', 'Двухнедельный штурм (14 дней подряд)', 'Держать непрерывную серию подготовки 14 дней подряд', 'baumanka_boss', BS, 60, effectiveStreak, 14, 'дн.', 'streak7'),
+      mk('ach_streak_21', 'Три недели без сбоев (21 день)', 'Держать непрерывную серию подготовки 21 день подряд', 'baumanka_boss', BS, 78, effectiveStreak, 21, 'дн.', 'streak7'),
+      mk('ach_streak_30', 'Месяц железной воли (30 дней)', 'Держать непрерывную серию подготовки 30 дней подряд', 'baumanka_boss', BS, 100, effectiveStreak, 30, 'дн.', 'automat'),
+      mk('ach_active_days_3', 'Три учебных дня', 'Заниматься подготовкой минимум в 3 разных дня по календарю', 'baumanka_boss', BS, 10, activeStudyDays, 3, 'дн.', 'frost3'),
+      mk('ach_active_days_5', 'Пять учебных дней', 'Заниматься подготовкой минимум в 5 разных дней по календарю', 'baumanka_boss', BS, 16, activeStudyDays, 5, 'дн.', 'frost3'),
+      mk('ach_active_days_10', 'Декада упорства (10 учебных дней)', 'Заниматься подготовкой минимум в 10 разных дней по календарю', 'baumanka_boss', BS, 35, activeStudyDays, 10, 'дн.', 'frost3'),
+      mk('ach_active_days_20', 'Двадцать дней сессии', 'Заниматься подготовкой минимум в 20 разных дней по календарю', 'baumanka_boss', BS, 55, activeStudyDays, 20, 'дн.', 'frost3'),
+      mk('ach_active_days_35', 'Тридцать пять дней в строю', 'Заниматься подготовкой минимум в 35 разных дней по календарю', 'baumanka_boss', BS, 78, activeStudyDays, 35, 'дн.', 'automat'),
+      mk('ach_ready_25', 'Разгон готовности (25%+)', 'Довести общую готовность активного предмета до 25% и выше', 'baumanka_boss', BS, 12, readinessPct, 25, '%', 'admitted'),
+      mk('ach_ready_50', 'Зачётная книжка открыта (50%+)', 'Довести общую готовность активного предмета до 50% и выше', 'baumanka_boss', BS, 22, readinessPct, 50, '%', 'admitted'),
+      mk('ach_ready_75', 'К зачёту допущен (75%+)', 'Довести общую готовность активного предмета до 75% и выше', 'baumanka_boss', BS, 36, readinessPct, 75, '%', 'admitted'),
+      mk('ach_ready_95', 'Автомат до боя курантов (95%+)', 'Довести общую готовность активного предмета до 95%+', 'baumanka_boss', BS, 60, readinessPct, 95, '%', 'automat'),
+      mk('ach_ready_100', 'Абсолютный максимум (100%)', 'Довести общую готовность активного предмета до 100%', 'baumanka_boss', BS, 95, readinessPct, 100, '%', 'automat'),
+      mk('ach_all_3_subjects_10', 'Триумвират ИУ / ФН (3 предмета × 10)', 'Выучить минимум по 10 карточек в каждом из трёх предметов: Матан, Ангем и АИП', 'baumanka_boss', BS, 55, minKnownAcross3Subjects, 10, 'карт./предм.', 'automat'),
+      mk('ach_all_3_subjects_25', 'Тройной штурм (3 предмета × 25)', 'Выучить минимум по 25 карточек в Матане, Ангеме и АИП', 'baumanka_boss', BS, 80, minKnownAcross3Subjects, 25, 'карт./предм.', 'automat'),
+      mk('ach_all_3_subjects_50', 'Легенда первого курса (3 × 50)', 'Выучить минимум по 50 карточек в Матане, Ангеме и АИП', 'baumanka_boss', BS, 115, minKnownAcross3Subjects, 50, 'карт./предм.', 'automat'),
     ];
   }, [
     srMap,
@@ -990,6 +537,7 @@ export function RewardsModal({
     bestStreak,
     quizStats.bestScorePct,
     quizStats.completedCount,
+    quizStats.totalQuestionsAnswered,
     readinessPct,
   ]);
 
@@ -1083,7 +631,7 @@ export function RewardsModal({
               </div>
               <div className="min-w-0">
                 <h2 className="text-base sm:text-lg font-bold text-slate-950 dark:text-[#F3F4F6] truncate">
-                  Награды, анти-тильт и Зал из 52 достижений зимней сессии
+                  Награды, анти-тильт и Зал из {sessionAchievements.length} достижений зимней сессии
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-[#94A3B8] truncate">
                   Хардкорная экономика XP: закрывай слабые места и билеты ФН-12 → забирай бонусы ачивок → отдыхай по праву
@@ -1251,14 +799,14 @@ export function RewardsModal({
                         Примерно ещё{' '}
                         <strong className="text-slate-700 dark:text-[#D1D5DB]">
                           {Math.ceil(
-                            (nextLocked.costXp - rewardState.balanceXp) / 5,
+                            (nextLocked.costXp - rewardState.balanceXp) / 3,
                           )}{' '}
                           карточек
                         </strong>{' '}
                         или{' '}
                         <strong className="text-slate-700 dark:text-[#D1D5DB]">
                           {Math.ceil(
-                            (nextLocked.costXp - rewardState.balanceXp) / 12,
+                            (nextLocked.costXp - rewardState.balanceXp) / 8,
                           )}{' '}
                           решённых задач
                         </strong>{' '}
@@ -1315,7 +863,7 @@ export function RewardsModal({
                   >
                     {streakFreezesCount >= 3
                       ? 'Максимум (3/3 ❄️)'
-                      : 'Купить заморозку · 150 XP'}
+                      : 'Купить заморозку · 250 XP'}
                   </button>
                 </div>
               </div>
@@ -1323,46 +871,46 @@ export function RewardsModal({
               {/* How XP is Earned Strip (Harder Economy) */}
               <div className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#0E1522] px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-600 dark:text-[#94A3B8]">
                 <span className="font-semibold text-slate-900 dark:text-[#F3F4F6]">
-                  Усложнённая экономика XP (КД карточки 3 мин):
+                  Хардкорная экономика XP (КД карточки 5 мин):
                 </span>
                 <span>
                   Закрытие ошибки/сложной:{' '}
                   <strong className="text-amber-600 dark:text-amber-300">
-                    +8 XP
+                    +5 XP
                   </strong>
                 </span>
                 <span>
                   Карточка легко/хорошо:{' '}
                   <strong className="text-emerald-600 dark:text-emerald-400">
-                    +5 / +4 XP
+                    +3 / +2 XP
                   </strong>
                 </span>
                 <span>
                   Сложно / Не помню:{' '}
                   <strong className="text-sky-600 dark:text-sky-400">
-                    +2 / +1 XP
+                    +1 / 0 XP
                   </strong>
                 </span>
                 <span>
                   Решённая задача:{' '}
                   <strong className="text-emerald-600 dark:text-emerald-400">
-                    +12 XP
+                    +8 XP
                   </strong>
                 </span>
                 <span>
-                  Блиц-тест (от 60%):{' '}
+                  Блиц-тест (от 70%):{' '}
                   <strong className="text-amber-600 dark:text-amber-300">
-                    до +10 XP
+                    до +7 XP
                   </strong>
                 </span>
                 <span>
                   Раунд «Найди ложь»:{' '}
                   <strong className="text-rose-600 dark:text-rose-400">
-                    +5 XP
+                    +3 XP
                   </strong>
                 </span>
                 <span>
-                  1 мин Фокуса:{' '}
+                  2 мин Фокуса:{' '}
                   <strong className="text-sky-600 dark:text-sky-400">
                     +1 XP
                   </strong>
@@ -1579,29 +1127,38 @@ export function RewardsModal({
                 <div className="flex flex-wrap items-center gap-1.5">
                   {(
                     [
-                      {id: 'all', label: `Все (${sessionAchievements.length})`},
-                      {id: 'theory', label: 'Теория и память (10)'},
-                      {id: 'sm2_streaks', label: 'Серии и SM-2 (8)'},
-                      {id: 'practice', label: 'Практика и ФН-12 (10)'},
-                      {id: 'blitz_arena', label: 'Блиц и арена (6)'},
-                      {id: 'winter_focus', label: 'Зимний режим и фокус (8)'},
-                      {id: 'notes_arsenal', label: 'Конспекты и база (4)'},
-                      {id: 'baumanka_boss', label: 'Боссы Бауманки (6)'},
+                      {id: 'all', label: 'Все'},
+                      {id: 'theory', label: 'Теория и память'},
+                      {id: 'subjects', label: 'Предметы'},
+                      {id: 'sm2_streaks', label: 'Серии и SM-2'},
+                      {id: 'practice', label: 'Практика и ФН-12'},
+                      {id: 'blitz_arena', label: 'Блиц и арена'},
+                      {id: 'winter_focus', label: 'Зимний режим и фокус'},
+                      {id: 'notes_arsenal', label: 'Конспекты и база'},
+                      {id: 'baumanka_boss', label: 'Боссы Бауманки'},
                     ] as const
-                  ).map((cat) => (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setAchCategoryFilter(cat.id)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer ${
-                        achCategoryFilter === cat.id
-                          ? 'prism-tab-active text-slate-950 dark:text-white'
-                          : 'prism-tool-btn text-slate-600 dark:text-[#CBD5E1]'
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
+                  ).map((cat) => {
+                    const count =
+                      cat.id === 'all'
+                        ? sessionAchievements.length
+                        : sessionAchievements.filter(
+                            (a) => a.category === cat.id,
+                          ).length;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setAchCategoryFilter(cat.id)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+                          achCategoryFilter === cat.id
+                            ? 'prism-tab-active text-slate-950 dark:text-white'
+                            : 'prism-tool-btn text-slate-600 dark:text-[#CBD5E1]'
+                        }`}
+                      >
+                        {cat.label} ({count})
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {claimableAchievements.length > 1 && (

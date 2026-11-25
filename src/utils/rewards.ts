@@ -5,8 +5,8 @@ export const DEFAULT_REWARDS: RewardItem[] = [
   {
     id: 'rew_coffee',
     title: 'Чай / какао-брейк у окна · 10 мин',
-    subtitle: 'Разминка пройдена (~12 карточек или 5 задач)',
-    costXp: 60,
+    subtitle: 'Разминка пройдена (~30 карточек или 11 задач)',
+    costXp: 90,
     breakMinutes: 10,
     icon: 'coffee',
     permitQuote:
@@ -15,8 +15,8 @@ export const DEFAULT_REWARDS: RewardItem[] = [
   {
     id: 'rew_dota_turbo',
     title: '1 катка в Dota 2 (Турбо)',
-    subtitle: 'Быстрый допуск после разогрева (~26 карточек или 11 задач)',
-    costXp: 130,
+    subtitle: 'Быстрый допуск после серьёзного разогрева (~65 карточек или 25 задач)',
+    costXp: 200,
     breakMinutes: 25,
     icon: 'dota',
     permitQuote:
@@ -25,8 +25,8 @@ export const DEFAULT_REWARDS: RewardItem[] = [
   {
     id: 'rew_dota_full',
     title: '1 полноценная катка в Dota 2',
-    subtitle: 'Серьёзный этап закрыт (~44 карточки или 18 задач)',
-    costXp: 220,
+    subtitle: 'Серьёзный этап закрыт (~115 карточек или 44 задачи)',
+    costXp: 350,
     breakMinutes: 50,
     icon: 'dota',
     permitQuote:
@@ -35,8 +35,8 @@ export const DEFAULT_REWARDS: RewardItem[] = [
   {
     id: 'rew_series',
     title: 'Серия сериала + мандарины / вкусняшка',
-    subtitle: 'Уютная зимняя перезагрузка мозга (~52 карточки)',
-    costXp: 260,
+    subtitle: 'Уютная зимняя перезагрузка мозга (~140 карточек)',
+    costXp: 420,
     breakMinutes: 45,
     icon: 'movie',
     permitQuote:
@@ -45,8 +45,8 @@ export const DEFAULT_REWARDS: RewardItem[] = [
   {
     id: 'rew_party',
     title: '2 катки в пати / CS / Любимая игра',
-    subtitle: 'Мощный рывок (~76 карточек или 32 задачи)',
-    costXp: 380,
+    subtitle: 'Мощный рывок (~200 карточек или 75 задач)',
+    costXp: 600,
     breakMinutes: 90,
     icon: 'party',
     permitQuote:
@@ -55,12 +55,12 @@ export const DEFAULT_REWARDS: RewardItem[] = [
   {
     id: 'rew_free_evening',
     title: 'Вечер полной свободы (норма 100%)',
-    subtitle: 'Режим босса: экзаменационный минимум на день сделан',
-    costXp: 550,
+    subtitle: 'Хардкор-режим босса: огромный учебный объём закрыт',
+    costXp: 900,
     breakMinutes: 180,
     icon: 'food',
     permitQuote:
-      'ЛЕГЕНДА ЗИМНЕЙ СЕССИИ! Дневная норма выполнена на 100%. Иди в Доту, гулять или отдыхать — совесть абсолютно чиста.',
+      'ЛЕГЕНДА ЗИМНЕЙ СЕССИИ! Огромный объём подготовки выполнен на 100%. Иди в Доту, гулять или отдыхать — совесть абсолютно чиста.',
   },
 ];
 

@@ -72,10 +72,14 @@ export type DeckScopeFilter =
   | 'all'
   | 'official50'
   | 'extras'
+  | 'aip_textbook'
   | 'rk_basic'
   | 'rk_advanced'
   | 'rk_tasks'
   | 'rk_ticket'
+  | 'rk1_basic'
+  | 'rk1_proofs'
+  | 'angeom_lectures'
   | 'matan_theorems'
   | 'matan_defs'
   | 'custom';
@@ -236,7 +240,13 @@ export function FlashcardStage({
     const base = allCards.filter((card) => {
       if (skillIdSet && !skillIdSet.has(card.id)) return false;
       if (scopeFilter === 'official50' && card.id > 50) return false;
-      if (scopeFilter === 'extras' && (card.id <= 50 || card.isCustom)) return false;
+      if (
+        scopeFilter === 'extras' &&
+        (card.id <= 50 || card.id > 62 || card.isCustom)
+      )
+        return false;
+      if (scopeFilter === 'aip_textbook' && (card.id < 63 || card.id > 90))
+        return false;
       if (scopeFilter === 'rk_basic' && (card.id < 201 || card.id > 224)) return false;
       if (scopeFilter === 'rk_advanced' && (card.id < 225 || card.id > 232))
         return false;
@@ -245,6 +255,18 @@ export function FlashcardStage({
       if (
         scopeFilter === 'rk_ticket' &&
         !card.slides.some((s) => s.lectureId === 'rk2_angeom' && s.page === 4)
+      ) {
+        return false;
+      }
+      if (scopeFilter === 'rk1_basic' && (card.id < 251 || card.id > 280)) {
+        return false;
+      }
+      if (scopeFilter === 'rk1_proofs' && (card.id < 281 || card.id > 290)) {
+        return false;
+      }
+      if (
+        scopeFilter === 'angeom_lectures' &&
+        (card.id < 291 || card.id > 302)
       ) {
         return false;
       }
@@ -903,7 +925,7 @@ export function FlashcardStage({
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={
                 category === 'rk'
-                  ? 'Быстрый поиск (минор, ранг, ФСР, Крамер)...'
+                  ? 'Быстрый поиск (вектор, базис, минор, ранг, квадрика)...'
                   : category === 'matan'
                     ? 'Быстрый поиск (предел, Коши, Лагранж, Тейлор)...'
                     : 'Быстрый поиск (термин, вопрос, оператор C++)...'
@@ -922,10 +944,13 @@ export function FlashcardStage({
             >
               {category === 'rk' ? (
                 <>
-                  <option value="all">Вся теория РК 2 ({allCards.length})</option>
-                  <option value="rk_basic">Базовая теория (1–24)</option>
-                  <option value="rk_advanced">Повыш. сложность с док-вом (1–8)</option>
-                  <option value="rk_ticket">Типовой билет по теории (4 вопр.)</option>
+                  <option value="all">Весь Ангем ({allCards.length})</option>
+                  <option value="rk_basic">РК 2 · Базовая теория (1–24)</option>
+                  <option value="rk_advanced">РК 2 · Доказательства (1–8)</option>
+                  <option value="rk_ticket">РК 2 · Типовой билет (4 вопр.)</option>
+                  <option value="rk1_basic">РК 1 · Базовые вопросы (1–30)</option>
+                  <option value="rk1_proofs">РК 1 · Доказательства Ч.Б (1–10)</option>
+                  <option value="angeom_lectures">Экзамен · Лекции 1–5, 8–9 (12)</option>
                   <option value="custom">Свои карточки</option>
                 </>
               ) : category === 'matan' ? (
@@ -940,6 +965,7 @@ export function FlashcardStage({
                   <option value="all">Вся база ({allCards.length})</option>
                   <option value="official50">Билеты экзамена (1–50)</option>
                   <option value="extras">Доп. темы лекций (51–62)</option>
+                  <option value="aip_textbook">Учебник C++ и РК (63–90)</option>
                   <option value="custom">Свои карточки</option>
                 </>
               )}
@@ -957,10 +983,10 @@ export function FlashcardStage({
             >
               <option value="all">
                 {category === 'rk'
-                  ? 'Все материалы РК 2 (стр. 1–4)'
+                  ? `Все PDF Ангема (${availableLectures.length} док. · ${availableLectures.reduce((s, d) => s + d.pageCount, 0)} с.)`
                   : category === 'matan'
                     ? 'Все PDF Матана (5 док. · 190 с.)'
-                    : 'Все лекции (1.1–1.8)'}
+                    : 'Все лекции (1.1–1.8) и Учебник C++'}
               </option>
               {availableLectures.map((lec) => (
                 <option key={lec.id} value={lec.id}>
@@ -981,10 +1007,10 @@ export function FlashcardStage({
             >
               <option value="all">
                 {category === 'rk'
-                  ? 'Все разделы РК 2'
+                  ? `Все разделы Ангема (${availableChapters.length})`
                   : category === 'matan'
                     ? 'Все разделы Матана (7)'
-                    : 'Все главы (1–8)'}
+                    : `Все разделы АИП (${availableChapters.length})`}
               </option>
               {availableChapters.map((ch) => (
                 <option key={ch} value={ch}>
