@@ -22,6 +22,10 @@ import {
   WifiOff,
   HardDrive,
   RefreshCw,
+  Table2,
+  Compass,
+  FlaskConical,
+  Cpu,
 } from 'lucide-react';
 import { AppSection, StudyCategory } from '../types/study';
 import { getAutonomousMode } from '../utils/cardHelpers';
@@ -41,6 +45,11 @@ interface GuideWorkspaceProps {
   onOpenRewards: () => void;
   onExportBackup: () => void;
   onImportBackupClick: () => void;
+  onOpenClozeTables?: () => void;
+  onOpenMethodDecision?: () => void;
+  onOpenMathLab?: () => void;
+  onOpenCppTracer?: () => void;
+  onOpenExamSurvival?: () => void;
 }
 
 export const GuideWorkspace: React.FC<GuideWorkspaceProps> = ({
@@ -58,6 +67,11 @@ export const GuideWorkspace: React.FC<GuideWorkspaceProps> = ({
   onOpenRewards,
   onExportBackup,
   onImportBackupClick,
+  onOpenClozeTables,
+  onOpenMethodDecision,
+  onOpenMathLab,
+  onOpenCppTracer,
+  onOpenExamSurvival,
 }) => {
   const isAutonomous = getAutonomousMode();
   const subjectName =
@@ -469,6 +483,124 @@ export const GuideWorkspace: React.FC<GuideWorkspaceProps> = ({
                 className="w-full py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-200 text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 Запустить <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* 9. Тренажёр «Слепая таблица» */}
+          <div className="dt-surface rounded-2xl p-4 border border-cyan-500/30 flex flex-col justify-between gap-4 hover:border-cyan-400/60 transition-colors">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="p-2 rounded-xl bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                  <Table2 className="w-4 h-4" />
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-cyan-300">
+                  Модуль 1 · +15 XP
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-100">
+                Тренажёр «Слепая таблица»
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                8 интерактивных таблиц с пропусками: 10 эквивалентных б.м.ф., 6 рядов Маклорена (с факториалами и без!), точки разрыва, теорема Кронекера—Капелли, классы памяти C/C++ и обходы деревьев.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-800/80">
+              <button
+                onClick={onOpenClozeTables}
+                className="w-full py-2 px-3 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-100 text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                Запустить →
+              </button>
+            </div>
+          </div>
+
+          {/* 10. Выбор метода за 10 секунд */}
+          <div className="dt-surface rounded-2xl p-4 border border-indigo-500/30 flex flex-col justify-between gap-4 hover:border-indigo-400/60 transition-colors">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="p-2 rounded-xl bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                  <Compass className="w-4 h-4" />
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-300">
+                  Модуль 2 · 21 задача
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-100">
+                Тренажёр «Выбор метода»
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Алгоритмический навигатор: распознай тип неопределённости (0/0, ∞−∞ при x→−∞, 1^∞), матричное уравнение XA=B или задачу АИП и узнай, почему 3 других пути — это ловушки.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-800/80">
+              <button
+                onClick={onOpenMethodDecision}
+                className="w-full py-2 px-3 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/40 text-indigo-100 text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                Запустить →
+              </button>
+            </div>
+          </div>
+
+          {/* 11. Интерактивная Математическая лаборатория */}
+          <div className="dt-surface rounded-2xl p-4 border border-emerald-500/30 flex flex-col justify-between gap-4 hover:border-emerald-400/60 transition-colors">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="p-2 rounded-xl bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  <FlaskConical className="w-4 h-4" />
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+                  Модуль 3 · SVG + Гаусс
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-100">
+                Математическая лаборатория
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                3 песочницы в одном окне: живые графики многочленов Тейлора P_n(x) до n=9, интерактивный прицел Коши ε–δ и ε–N(ε), а также пошаговый решатель матриц, ранга и A⁻¹ методом Гаусса.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-800/80">
+              <button
+                onClick={onOpenMathLab}
+                className="w-full py-2 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-100 text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                Запустить →
+              </button>
+            </div>
+          </div>
+
+          {/* 12. Визуализатор памяти C/C++ + Калькулятор выживания */}
+          <div className="dt-surface rounded-2xl p-4 border border-amber-500/30 flex flex-col justify-between gap-4 hover:border-amber-400/60 transition-colors">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="p-2 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  <Cpu className="w-4 h-4" />
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">
+                  Модули 4 и 5 · C++ & Шанс %
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-100">
+                Визуализатор C++ и Шанс сдать билет %
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Пошаговая трассировка стека, кучи, сортировки строк матриц, C-строк и деревьев LNR/LRN + комбинаторный калькулятор вероятности вытянуть рабочий билет и Топ-7 билетов спасения.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+              <button
+                onClick={onOpenCppTracer}
+                className="flex-1 py-2 px-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-100 text-xs font-bold inline-flex items-center justify-center gap-1 transition-colors cursor-pointer"
+              >
+                Память C++ →
+              </button>
+              <button
+                onClick={onOpenExamSurvival}
+                className="py-2 px-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/40 text-rose-100 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Шанс % →
               </button>
             </div>
           </div>

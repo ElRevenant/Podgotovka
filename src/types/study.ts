@@ -237,6 +237,7 @@ export interface CustomSubject {
 export interface StudyPlannerSettings {
   examDates: Record<string, string>;
   dailyGoal: number;
+  dailyGoalsBySubject?: Record<string, number>;
   pomodoroMode: '25/5' | '50/10';
 }
 

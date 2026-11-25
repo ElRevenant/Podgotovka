@@ -28,24 +28,33 @@ import {
   Trophy,
   Upload,
   Zap,
+  Table2,
+  Compass,
+  FlaskConical,
+  Cpu,
 } from 'lucide-react';
 import {AchievementsModal} from './components/AchievementsModal';
 import {AchievementToast} from './components/AchievementToast';
 import {AllStatsModal} from './components/AllStatsModal';
 import {AmbientSnowBackdrop} from './components/AmbientSnowBackdrop';
 import {BlitzQuiz} from './components/BlitzQuiz';
+import {ClozeTableDrillModal} from './components/ClozeTableDrillModal';
 import {CompletenessAudit} from './components/CompletenessAudit';
+import {CppMemoryTracerModal} from './components/CppMemoryTracerModal';
 import {CramModeModal} from './components/CramModeModal';
 import {CustomCardModal} from './components/CustomCardModal';
 import {DailyGoalRing} from './components/DailyGoalRing';
 import {ExamSimulator} from './components/ExamSimulator';
+import {ExamSurvivalModal} from './components/ExamSurvivalModal';
 import {FeynmanFreshmanModal} from './components/FeynmanFreshmanModal';
 import {DeckStatusFilter, FlashcardStage} from './components/FlashcardStage';
 import {FocusSoundscape} from './components/FocusSoundscape';
 import {FormulaCheatSheetModal} from './components/FormulaCheatSheetModal';
 import {GuideWorkspace} from './components/GuideWorkspace';
+import {InteractiveMathLabModal} from './components/InteractiveMathLabModal';
 import {KnowledgeGraphModal} from './components/KnowledgeGraphModal';
 import {LecturesLibrary} from './components/LecturesLibrary';
+import {MethodDecisionTreeModal} from './components/MethodDecisionTreeModal';
 import {OfflineIndicator} from './components/OfflineIndicator';
 import {OralExamDialogModal} from './components/OralExamDialogModal';
 import {PdfSubjectImporterModal} from './components/PdfSubjectImporterModal';
@@ -84,6 +93,7 @@ import {
 import {
   addDaysToDateKey,
   computeActivityStreaks,
+  computeAdaptiveSubjectDailyGoal,
   DEFAULT_APP_PREFERENCES,
   DEFAULT_PLANNER_SETTINGS,
   DEFAULT_QUIZ_STATS,
@@ -190,6 +200,11 @@ export default function App() {
   const [allStatsOpen, setAllStatsOpen] = useState<boolean>(false);
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [modesMenuOpen, setModesMenuOpen] = useState<boolean>(false);
+  const [clozeTablesOpen, setClozeTablesOpen] = useState<boolean>(false);
+  const [methodDecisionOpen, setMethodDecisionOpen] = useState<boolean>(false);
+  const [mathLabOpen, setMathLabOpen] = useState<boolean>(false);
+  const [cppTracerOpen, setCppTracerOpen] = useState<boolean>(false);
+  const [examSurvivalOpen, setExamSurvivalOpen] = useState<boolean>(false);
   const [rewardState, setRewardState] =
     useState<RewardSystemState>(loadRewardState);
   const lastCardXpTimeRef = useRef<Record<number, number>>({});
@@ -814,19 +829,6 @@ export default function App() {
     setPlannerSettings((prev) => ({...prev, ...patch}));
   };
 
-  useEffect(() => {
-    setDailyGoalDraft(String(plannerSettings.dailyGoal));
-  }, [plannerSettings.dailyGoal]);
-
-  const commitDailyGoal = (raw: string) => {
-    const parsed = Number(raw);
-    const clamped = Number.isFinite(parsed)
-      ? Math.max(5, Math.min(100, Math.round(parsed)))
-      : plannerSettings.dailyGoal;
-    handleUpdatePlanner({dailyGoal: clamped});
-    setDailyGoalDraft(String(clamped));
-  };
-
   const handleUpdateExamDate = (category: StudyCategory, dateIso: string) => {
     setPlannerSettings((prev) => ({
       ...prev,
@@ -1207,11 +1209,6 @@ export default function App() {
 
   const todayFocusMinutes = activityLog[getLocalDateKey()]?.focusMinutes ?? 0;
 
-  const {todayTotal, currentStreak, bestStreak} = useMemo(
-    () => computeActivityStreaks(activityLog, plannerSettings.dailyGoal),
-    [activityLog, plannerSettings.dailyGoal],
-  );
-
   const quickPlanSummary = useMemo(() => {
     const now = Date.now();
     const examDateIso =
@@ -1232,6 +1229,70 @@ export default function App() {
       weakCount,
     };
   }, [plannerSettings.examDates, studyCategory, activeCategoryCards, srMap]);
+
+  const adaptiveDailyGoalForSubject = useMemo(
+    () =>
+      computeAdaptiveSubjectDailyGoal({
+        totalCards: dashboardStats.total,
+        knownCards: dashboardStats.known,
+        inProgressCards: dashboardStats.inProgress,
+        weakCount: quickPlanSummary.weakCount,
+        totalTasks: dashboardStats.tasksTotal,
+        solvedTasks: dashboardStats.tasksSolved,
+        daysLeft: quickPlanSummary.daysLeft,
+      }),
+    [
+      dashboardStats.total,
+      dashboardStats.known,
+      dashboardStats.inProgress,
+      dashboardStats.tasksTotal,
+      dashboardStats.tasksSolved,
+      quickPlanSummary.weakCount,
+      quickPlanSummary.daysLeft,
+    ],
+  );
+
+  const manualSubjectGoal =
+    plannerSettings.dailyGoalsBySubject?.[studyCategory];
+  const activeSubjectDailyGoal =
+    manualSubjectGoal ?? adaptiveDailyGoalForSubject;
+
+  useEffect(() => {
+    setDailyGoalDraft(String(activeSubjectDailyGoal));
+  }, [activeSubjectDailyGoal, studyCategory]);
+
+  const commitDailyGoal = (raw: string) => {
+    const parsed = Number(raw);
+    const clamped = Number.isFinite(parsed)
+      ? Math.max(5, Math.min(100, Math.round(parsed)))
+      : activeSubjectDailyGoal;
+    handleUpdatePlanner({
+      dailyGoal: clamped,
+      dailyGoalsBySubject: {
+        ...(plannerSettings.dailyGoalsBySubject ?? {}),
+        [studyCategory]: clamped,
+      },
+    });
+    setDailyGoalDraft(String(clamped));
+  };
+
+  const handleResetSubjectGoalToAuto = () => {
+    setPlannerSettings((prev) => {
+      const nextMap = {...(prev.dailyGoalsBySubject ?? {})};
+      delete nextMap[studyCategory];
+      return {
+        ...prev,
+        dailyGoal: adaptiveDailyGoalForSubject,
+        dailyGoalsBySubject: nextMap,
+      };
+    });
+    setDailyGoalDraft(String(adaptiveDailyGoalForSubject));
+  };
+
+  const {todayTotal, currentStreak, bestStreak} = useMemo(
+    () => computeActivityStreaks(activityLog, activeSubjectDailyGoal),
+    [activityLog, activeSubjectDailyGoal],
+  );
 
   const nextCustomId = useMemo(() => {
     const allKnownIds = [
@@ -1632,23 +1693,42 @@ export default function App() {
               <div className="flex items-center gap-2 shrink-0">
                 <DailyGoalRing
                   todayTotal={todayTotal}
-                  dailyGoal={plannerSettings.dailyGoal}
+                  dailyGoal={activeSubjectDailyGoal}
                   onClick={() => setAllStatsOpen(true)}
                 />
-                <label
-                  className="inline-flex flex-col items-start gap-0.5 shrink-0"
-                  title="Изменить дневную цель повторений (от 5 до 100 в день)"
-                >
-                  <span className="text-[10px] font-medium text-slate-500 dark:text-[#9CA3AF] leading-none">
-                    Цель/день
-                  </span>
+                <div className="inline-flex flex-col items-start gap-0.5 shrink-0">
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="text-[10px] font-medium text-slate-500 dark:text-[#9CA3AF] leading-none"
+                      title={`Адаптивная дневная цель для этой вкладки рассчитывается по оставшимся карточкам (${dashboardStats.total - dashboardStats.known}), слабым темам (${quickPlanSummary.weakCount}) и дням до экзамена (${quickPlanSummary.daysLeft} дн.): рекомендуется ${adaptiveDailyGoalForSubject}/день`}
+                    >
+                      Цель/день
+                    </span>
+                    {manualSubjectGoal !== undefined ? (
+                      <button
+                        type="button"
+                        onClick={handleResetSubjectGoalToAuto}
+                        title={`Сбросить на адаптивную цель для этого предмета (${adaptiveDailyGoalForSubject}/день)`}
+                        className="text-[9px] font-semibold px-1 py-0.2 rounded bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 hover:bg-cyan-500/25 cursor-pointer leading-none"
+                      >
+                        Авто:{adaptiveDailyGoalForSubject}
+                      </button>
+                    ) : (
+                      <span
+                        title={`Автоматическая цель по твоей готовности (${dashboardStats.readinessPct}%) в этой вкладке`}
+                        className="text-[9px] font-semibold px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 leading-none"
+                      >
+                        Авто
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="number"
                     min={5}
                     max={100}
                     step={1}
                     inputMode="numeric"
-                    aria-label="Дневная цель повторений"
+                    aria-label="Дневная цель повторений для текущего предмета"
                     value={dailyGoalDraft}
                     onChange={(e) => {
                       const nextVal = e.target.value;
@@ -1659,7 +1739,14 @@ export default function App() {
                         parsed >= 5 &&
                         parsed <= 100
                       ) {
-                        handleUpdatePlanner({dailyGoal: Math.round(parsed)});
+                        const rounded = Math.round(parsed);
+                        handleUpdatePlanner({
+                          dailyGoal: rounded,
+                          dailyGoalsBySubject: {
+                            ...(plannerSettings.dailyGoalsBySubject ?? {}),
+                            [studyCategory]: rounded,
+                          },
+                        });
                       }
                     }}
                     onBlur={() => commitDailyGoal(dailyGoalDraft)}
@@ -1671,7 +1758,7 @@ export default function App() {
                     }}
                     className="prism-input w-14 h-7 px-2 text-xs font-mono font-semibold text-center tabular-nums rounded-lg text-slate-900 dark:text-[#F8FAFC]"
                   />
-                </label>
+                </div>
               </div>
 
               <div className="hidden sm:block h-10 w-px bg-slate-200/80 dark:bg-white/[0.08] shrink-0" />
@@ -1883,6 +1970,51 @@ export default function App() {
                 <Trophy className="h-3.5 w-3.5 text-amber-500 dark:text-amber-300 shrink-0" />
                 <span>Награды и ачивки</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setClozeTablesOpen(true)}
+                className="prism-tool-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full text-cyan-800 dark:text-cyan-200 border-cyan-500/30 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Table2 className="h-3.5 w-3.5 text-cyan-500 dark:text-cyan-400 shrink-0" />
+                <span>Слепая таблица</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMethodDecisionOpen(true)}
+                className="prism-tool-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full text-indigo-800 dark:text-indigo-200 border-indigo-500/30 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Compass className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+                <span>Выбор метода</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMathLabOpen(true)}
+                className="prism-tool-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full text-emerald-800 dark:text-emerald-200 border-emerald-500/30 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <FlaskConical className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
+                <span>Мат-лаборатория</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCppTracerOpen(true)}
+                className="prism-tool-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full text-amber-800 dark:text-amber-200 border-amber-500/30 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Cpu className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
+                <span>Визуализатор C++</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExamSurvivalOpen(true)}
+                className="prism-tool-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full text-rose-800 dark:text-rose-200 border-rose-500/30 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <ShieldAlert className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400 shrink-0" />
+                <span>Шанс сдать билет %</span>
+              </button>
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
@@ -1933,10 +2065,10 @@ export default function App() {
                 {modesMenuOpen && (
                   <div
                     role="menu"
-                    className="absolute right-0 mt-2 w-[280px] sm:w-[310px] z-40 rounded-[18px] border border-slate-200/80 dark:border-white/[0.09] bg-white/95 dark:bg-[#0E1522]/96 backdrop-blur-xl shadow-2xl p-3 space-y-2.5"
+                    className="absolute right-0 mt-2 w-[290px] sm:w-[330px] z-40 rounded-[18px] border border-slate-200/80 dark:border-white/[0.09] bg-white/95 dark:bg-[#0E1522]/96 backdrop-blur-xl shadow-2xl p-3 space-y-2.5"
                   >
                     <div className="px-1 pt-0.5 flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-[#94A3B8]">
-                      <span>Инструменты и резервная копия</span>
+                      <span>Интерактивные лаборатории и бэкап</span>
                       {sessionStats.totalReviewed > 0 && (
                         <button
                           type="button"
@@ -1950,6 +2082,71 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setModesMenuOpen(false);
+                          setClozeTablesOpen(true);
+                        }}
+                        className="prism-tool-btn inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full text-slate-700 dark:text-[#E5E7EB] cursor-pointer"
+                      >
+                        <Table2 className="h-3 w-3 text-cyan-400" />
+                        <span>Слепая таблица</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setModesMenuOpen(false);
+                          setMethodDecisionOpen(true);
+                        }}
+                        className="prism-tool-btn inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full text-slate-700 dark:text-[#E5E7EB] cursor-pointer"
+                      >
+                        <Compass className="h-3 w-3 text-indigo-400" />
+                        <span>Выбор метода</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setModesMenuOpen(false);
+                          setMathLabOpen(true);
+                        }}
+                        className="prism-tool-btn inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full text-slate-700 dark:text-[#E5E7EB] cursor-pointer"
+                      >
+                        <FlaskConical className="h-3 w-3 text-emerald-400" />
+                        <span>Мат-лаборатория</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setModesMenuOpen(false);
+                          setCppTracerOpen(true);
+                        }}
+                        className="prism-tool-btn inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full text-slate-700 dark:text-[#E5E7EB] cursor-pointer"
+                      >
+                        <Cpu className="h-3 w-3 text-amber-400" />
+                        <span>Визуализатор C++</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setModesMenuOpen(false);
+                          setExamSurvivalOpen(true);
+                        }}
+                        className="prism-tool-btn inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full text-slate-700 dark:text-[#E5E7EB] cursor-pointer"
+                      >
+                        <ShieldAlert className="h-3 w-3 text-rose-400" />
+                        <span>Шанс сдать билет %</span>
+                      </button>
+
                       <button
                         type="button"
                         role="menuitem"
@@ -2206,6 +2403,11 @@ export default function App() {
             }}
             onExportBackup={handleExportBackup}
             onImportBackupClick={() => fileInputRef.current?.click()}
+            onOpenClozeTables={() => setClozeTablesOpen(true)}
+            onOpenMethodDecision={() => setMethodDecisionOpen(true)}
+            onOpenMathLab={() => setMathLabOpen(true)}
+            onOpenCppTracer={() => setCppTracerOpen(true)}
+            onOpenExamSurvival={() => setExamSurvivalOpen(true)}
           />
         )}
       </main>
@@ -2430,6 +2632,73 @@ export default function App() {
           onExportNow={handleExportBackup}
           onImportClick={() => fileInputRef.current?.click()}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {clozeTablesOpen && (
+        <ClozeTableDrillModal
+          isOpen={clozeTablesOpen}
+          onClose={() => setClozeTablesOpen(false)}
+          initialSubject={
+            studyCategory === 'rk'
+              ? 'rk'
+              : studyCategory === 'exam'
+                ? 'exam'
+                : 'matan'
+          }
+          onAwardXp={(amount) => {
+            grantStudyXp(amount);
+            showTempBanner('ok', `Слепая таблица пройдена: +${amount} XP!`);
+          }}
+        />
+      )}
+
+      {methodDecisionOpen && (
+        <MethodDecisionTreeModal
+          isOpen={methodDecisionOpen}
+          onClose={() => setMethodDecisionOpen(false)}
+          initialSubject={
+            studyCategory === 'rk'
+              ? 'rk'
+              : studyCategory === 'exam'
+                ? 'exam'
+                : studyCategory === 'matan'
+                  ? 'matan'
+                  : 'all'
+          }
+          onAwardXp={(amount) => {
+            grantStudyXp(amount);
+            showTempBanner('ok', `Серия точных выборов метода: +${amount} XP!`);
+          }}
+        />
+      )}
+
+      {mathLabOpen && (
+        <InteractiveMathLabModal
+          isOpen={mathLabOpen}
+          onClose={() => setMathLabOpen(false)}
+          initialTab={studyCategory === 'rk' ? 'gauss' : 'taylor'}
+        />
+      )}
+
+      {cppTracerOpen && (
+        <CppMemoryTracerModal
+          isOpen={cppTracerOpen}
+          onClose={() => setCppTracerOpen(false)}
+        />
+      )}
+
+      {examSurvivalOpen && (
+        <ExamSurvivalModal
+          isOpen={examSurvivalOpen}
+          onClose={() => setExamSurvivalOpen(false)}
+          subjectLabel={activeSubjectDisplayTitle}
+          cards={activeCategoryCards}
+          srMap={srMap}
+          taskMastery={taskMastery}
+          onStartRescueSprint={(label, cardIds) => {
+            handleOpenTopicInDeck(label, cardIds, cardIds[0]);
+          }}
         />
       )}
 

@@ -195,6 +195,17 @@ export function loadPlannerSettings(): StudyPlannerSettings {
         }
       }
     }
+    const cleanGoalsBySubject: Record<string, number> = {};
+    if (
+      parsed.dailyGoalsBySubject &&
+      typeof parsed.dailyGoalsBySubject === 'object'
+    ) {
+      for (const [k, v] of Object.entries(parsed.dailyGoalsBySubject)) {
+        if (typeof v === 'number' && Number.isFinite(v) && v >= 5 && v <= 100) {
+          cleanGoalsBySubject[k] = Math.round(v);
+        }
+      }
+    }
     return {
       examDates: mergedDates,
       dailyGoal:
@@ -203,11 +214,54 @@ export function loadPlannerSettings(): StudyPlannerSettings {
         parsed.dailyGoal <= 100
           ? Math.round(parsed.dailyGoal)
           : DEFAULT_PLANNER_SETTINGS.dailyGoal,
+      dailyGoalsBySubject: cleanGoalsBySubject,
       pomodoroMode: parsed.pomodoroMode === '50/10' ? '50/10' : '25/5',
     };
   } catch {
     return DEFAULT_PLANNER_SETTINGS;
   }
+}
+
+/**
+ * Computes an adaptive daily study goal for a specific subject tab based on:
+ * - total cards & how many are already 'known' or 'learning'
+ * - overdue/weak cards requiring urgent repetition
+ * - unsolved practical tasks
+ * - days remaining until the subject's exam date
+ */
+export function computeAdaptiveSubjectDailyGoal(params: {
+  totalCards: number;
+  knownCards: number;
+  inProgressCards: number;
+  weakCount: number;
+  totalTasks: number;
+  solvedTasks: number;
+  daysLeft: number;
+}): number {
+  const {
+    totalCards,
+    knownCards,
+    inProgressCards,
+    weakCount,
+    totalTasks,
+    solvedTasks,
+    daysLeft,
+  } = params;
+  const safeDays = Math.max(1, Math.min(60, daysLeft));
+  const unmasteredCards = Math.max(0, totalCards - knownCards);
+  const remainingNewWork = Math.max(
+    0,
+    unmasteredCards - inProgressCards * 0.35,
+  );
+  const remainingTasks = Math.max(0, totalTasks - solvedTasks);
+
+  // Distribute remaining cards + tasks across remaining days + add a daily review buffer
+  const rawDaily =
+    (remainingNewWork * 1.15 + remainingTasks * 1.4) / safeDays +
+    Math.min(12, weakCount * 0.4) +
+    Math.min(8, Math.ceil(knownCards * 0.08));
+
+  return Math.max(5, Math.min(100, Math.round(rawDaily)));
 }
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
